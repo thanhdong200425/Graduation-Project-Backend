@@ -29,7 +29,20 @@ services:
     environment:
       QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY}
 
+  mongodb:
+    image: mongo:7
+    container_name: ${MONGO_CONTAINER_NAME:-mongodb_testmaker}
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-mongo}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-mongo}
+      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE:-testmaker}
+    volumes:
+      - mongodb_data_testmaker:/data/db
 
 volumes:
   postgres_data_testmaker:
   qdrant_storage_testmaker:
+  mongodb_data_testmaker:
