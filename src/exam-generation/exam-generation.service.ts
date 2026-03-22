@@ -9,7 +9,9 @@ export class ExamGenerationService {
     private readonly questionGenerationGraphService: QuestionGenerationGraphService,
   ) {}
 
-  async generateQuestions(dto: GenerateQuestionsDto): Promise<GeneratedQuestion[]> {
+  async generateQuestions(
+    dto: GenerateQuestionsDto,
+  ): Promise<GeneratedQuestion[]> {
     return this.questionGenerationGraphService.run({
       subjectCode: dto.subject_code,
       chapterNo: dto.chapter_no,

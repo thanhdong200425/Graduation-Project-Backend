@@ -4,7 +4,7 @@ import { GenerateQuestionsDto } from './dto/generate-questions.dto';
 import { ExamGenerationService } from './exam-generation.service';
 import { GeneratedQuestion } from './types/question.types';
 
-@UseGuards(JwtAuthGuard)
+// @UseGuards(JwtAuthGuard)
 @Controller()
 export class ExamGenerationController {
   constructor(private readonly examGenerationService: ExamGenerationService) {}
