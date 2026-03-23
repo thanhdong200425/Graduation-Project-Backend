@@ -2,6 +2,7 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { OllamaEmbeddings } from '@langchain/ollama';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { RetrievedChunk } from '../types/question.types';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ChapterRetrievalService {
@@ -9,14 +10,15 @@ export class ChapterRetrievalService {
   private readonly collectionName: string;
   private readonly embeddings: OllamaEmbeddings;
 
-  constructor() {
-    const qdrantUrl = process.env.QDRANT_URL ?? 'http://localhost:6333';
-    const qdrantApiKey = process.env.QDRANT_API_KEY;
-    const ollamaBaseUrl =
-      process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434';
-    const embeddingModel = process.env.OLLAMA_EMBED_MODEL ?? 'all-minilm';
+  constructor(private configService: ConfigService) {
+    const qdrantUrl = configService.getOrThrow<string>('QDRANT_URL');
+    const qdrantApiKey = configService.getOrThrow<string>('QDRANT_API_KEY');
+    const ollamaBaseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
+    const embeddingModel = configService.getOrThrow<string>(
+      'OLLAMA_EMBEDDING_MODEL',
+    );
 
-    this.collectionName = process.env.QDRANT_COLLECTION ?? 'textbook_chunks';
+    this.collectionName = configService.getOrThrow('QDRANT_COLLECTION');
     this.qdrantClient = new QdrantClient({
       url: qdrantUrl,
       apiKey: qdrantApiKey,

@@ -9,6 +9,7 @@ import {
   GeneratedQuestion,
   RetrievedChunk,
 } from '../types/question.types';
+import { ConfigService } from '@nestjs/config';
 
 // Annotation is used to define the schema of graph state
 const QuestionGenerationState = Annotation.Root({
@@ -30,11 +31,18 @@ export class QuestionGenerationGraphService {
   constructor(
     private readonly chapterRetrievalService: ChapterRetrievalService,
     private readonly questionPromptService: QuestionPromptService,
+    private readonly configService: ConfigService,
   ) {
+    const model = configService.getOrThrow<string>('OLLAMA_MODEL');
+    const baseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
+    let temperature = configService.getOrThrow<number>('OLLAMA_TEMPERATURE');
+    if (typeof temperature == 'string') {
+      temperature = Number(temperature);
+    }
     this.llm = new ChatOllama({
-      model: process.env.OLLAMA_MODEL,
-      baseUrl: process.env.OLLAMA_BASE_URL ?? 'http://localhost:11434',
-      temperature: 0.2,
+      model,
+      baseUrl,
+      temperature,
     });
   }
 
@@ -79,7 +87,7 @@ export class QuestionGenerationGraphService {
           const response = await this.llm.invoke(state.prompt);
           content =
             typeof response.content === 'string' ? response.content : '';
-        } catch {
+        } catch (e) {
           throw new ServiceUnavailableException(
             'Failed to generate questions from Ollama.',
           );
