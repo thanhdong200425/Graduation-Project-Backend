@@ -87,7 +87,7 @@ export class QuestionGenerationGraphService {
           const response = await this.llm.invoke(state.prompt);
           content =
             typeof response.content === 'string' ? response.content : '';
-        } catch (e) {
+        } catch {
           throw new ServiceUnavailableException(
             'Failed to generate questions from Ollama.',
           );
