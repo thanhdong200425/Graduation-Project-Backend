@@ -105,6 +105,7 @@ export class QuestionPromptService {
       `Difficulty counts must be exactly: easy=${params.difficultyCounts.easy}, medium=${params.difficultyCounts.medium}, hard=${params.difficultyCounts.hard}.`,
       'Use only the provided context. Do not invent facts not present in context.',
       'Each question must have exactly 4 options in an array and exactly 1 correct answer.',
+      'Remember to transform your response into Vietnamese',
       'Return ONLY valid JSON (no markdown, no backticks) as an array with this schema:',
       '[{"question":"...","options":["A","B","C","D"],"answer":"...","difficulty":"easy|medium|hard"}]',
       '',
