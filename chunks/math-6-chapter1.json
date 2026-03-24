@@ -1,0 +1,26 @@
+[
+  {
+    "subject": "Math",
+    "grade": 6,
+    "chapter": "Ôn tập và bổ túc về số tự nhiên",
+    "lesson": "Tập hợp. Phần tử của tập hợp",
+    "topic": "Các ví dụ về tập hợp",
+    "content": "Khái niệm tập hợp thường gặp trong toán học và cả trong đời sống. Chẳng hạn: Tập hợp các đồ vật (sách, bút) đặt trên bàn; Tập hợp các học sinh của lớp 6A; Tập hợp các số tự nhiên nhỏ hơn 4; Tập hợp các chữ cái a, b, c."
+  },
+  {
+    "subject": "Math",
+    "grade": 6,
+    "chapter": "Ôn tập và bổ túc về số tự nhiên",
+    "lesson": "Tập hợp. Phần tử của tập hợp",
+    "topic": "Cách viết và các kí hiệu của tập hợp",
+    "content": "Người ta thường đặt tên tập hợp bằng chữ cái in hoa. Để viết một tập hợp, thường có hai cách: Liệt kê các phần tử của tập hợp, hoặc chỉ ra tính chất đặc trưng cho các phần tử của tập hợp đó. Kí hiệu ∈ đọc là 'thuộc' hoặc 'là phần tử của'; kí hiệu ∉ đọc là 'không thuộc' hoặc 'không là phần tử của'."
+  },
+  {
+    "subject": "Math",
+    "grade": 6,
+    "chapter": "Ôn tập và bổ túc về số tự nhiên",
+    "lesson": "Tập hợp các số tự nhiên",
+    "topic": "Tập hợp N và tập hợp N*",
+    "content": "Các số 0, 1, 2, 3, ... là các số tự nhiên. Tập hợp các số tự nhiên được kí hiệu là N (N = {0; 1; 2; 3; ...}). Tập hợp các số tự nhiên khác 0 được kí hiệu là N* (N* = {1; 2; 3; 4; ...}). Mỗi số tự nhiên được biểu diễn bởi một điểm trên tia số."
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "_id": "ck_toan6_ch1_bai1_p1",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 1,
+    "section_title": "Khái niệm tập hợp",
+    "chunk_text": "Tập hợp là một nhóm các đối tượng được xác định rõ ràng. Mỗi đối tượng trong tập hợp được gọi là một phần tử của tập hợp."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai1_p2",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 1,
+    "section_title": "Cách viết tập hợp",
+    "chunk_text": "Người ta thường dùng chữ cái in hoa để đặt tên tập hợp và dùng dấu ngoặc nhọn để viết các phần tử của tập hợp. Ví dụ: A = {1, 2, 3}."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai1_p3",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 1,
+    "section_title": "Phần tử thuộc tập hợp",
+    "chunk_text": "Nếu một đối tượng là phần tử của tập hợp thì ta dùng kí hiệu thuộc. Ví dụ: 2 thuộc tập hợp A = {1, 2, 3}."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai1_p4",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 1,
+    "section_title": "Phần tử không thuộc tập hợp",
+    "chunk_text": "Nếu một đối tượng không phải là phần tử của tập hợp thì ta dùng kí hiệu không thuộc. Ví dụ: 5 không thuộc tập hợp A = {1, 2, 3}."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai2_p1",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 2,
+    "section_title": "Tập hợp số tự nhiên",
+    "chunk_text": "Các số 0, 1, 2, 3, 4, 5, ... tạo thành tập hợp số tự nhiên. Tập hợp số tự nhiên được kí hiệu là N."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai2_p2",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 2,
+    "section_title": "Số tự nhiên và tia số",
+    "chunk_text": "Các số tự nhiên có thể được biểu diễn trên tia số. Trên tia số, số ở bên phải lớn hơn số ở bên trái."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai2_p3",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 2,
+    "section_title": "Thứ tự trong tập hợp số tự nhiên",
+    "chunk_text": "Trong hai số tự nhiên khác nhau, luôn có một số nhỏ hơn số kia. Nếu a nhỏ hơn b thì viết a < b, nếu a lớn hơn b thì viết a > b."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai2_p4",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 2,
+    "section_title": "Số liền trước và số liền sau",
+    "chunk_text": "Mỗi số tự nhiên khác 0 đều có một số liền trước duy nhất. Mỗi số tự nhiên đều có một số liền sau duy nhất."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai3_p1",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 3,
+    "section_title": "Ghi số tự nhiên",
+    "chunk_text": "Trong hệ thập phân, cứ mười đơn vị ở một hàng thì tạo thành một đơn vị ở hàng liền trước nó. Các chữ số từ 0 đến 9 được dùng để ghi mọi số tự nhiên."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai3_p2",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 3,
+    "section_title": "Giá trị của chữ số",
+    "chunk_text": "Giá trị của một chữ số trong số tự nhiên phụ thuộc vào vị trí của nó. Cùng là chữ số 5 nhưng ở hàng chục và hàng trăm sẽ có giá trị khác nhau."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai3_p3",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 3,
+    "section_title": "Số La Mã",
+    "chunk_text": "Một số số La Mã thường gặp là I, V, X, L, C, D, M. Số La Mã thường được dùng để ghi số thứ tự hoặc các mốc đặc biệt."
+  },
+  {
+    "_id": "ck_toan6_ch1_bai4_p1",
+    "subject_code": "toan_6",
+    "chapter_no": 1,
+    "lesson_no": 4,
+    "section_title": "So sánh số tự nhiên",
+    "chunk_text": "Khi so sánh hai số tự nhiên, số nào có nhiều chữ số hơn thì lớn hơn. Nếu hai số có cùng số chữ số thì so sánh từ trái sang phải theo từng cặp chữ số tương ứng."
+  }
+]

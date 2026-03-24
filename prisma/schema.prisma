@@ -9,10 +9,136 @@ datasource db {
   provider = "postgresql"
 }
 
+enum DifficultyLevel {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum QuestionStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+}
+
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  name        String
+  grade       Int
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chapters Chapter[]
+  exams    Exam[]
+
+  @@map("subjects")
+}
+
+model Chapter {
+  id          String   @id @default(uuid())
+  subjectId   String
+  name        String
+  description String?
+  orderIndex  Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  textbookChunks     TextbookChunk[]
+  generatedQuestions GeneratedQuestion[]
+  exams              Exam[]
+
+  @@index([subjectId])
+  @@map("chapters")
+}
+
+model TextbookChunk {
+  id        String  @id @default(uuid())
+  chapterId String
+  lesson    String?
+  topic     String?
+  content   String
+  keywords  String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  chapter            Chapter             @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  generatedQuestions GeneratedQuestion[]
+
+  @@index([chapterId])
+  @@map("textbook_chunks")
+}
+
+model GeneratedQuestion {
+  id            String          @id @default(uuid())
+  chapterId     String
+  chunkId       String?
+  question      String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String
+  difficulty    DifficultyLevel
+  source        String?
+  status        QuestionStatus  @default(DRAFT)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  chunk         TextbookChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+  examQuestions ExamQuestion[]
+
+  @@index([chapterId])
+  @@index([chunkId])
+  @@index([status])
+  @@map("generated_questions")
+}
+
+model Exam {
+  id               String   @id @default(uuid())
+  subjectId        String
+  chapterId        String
+  title            String
+  totalQuestions   Int
+  difficultyEasy   Int
+  difficultyMedium Int
+  difficultyHard   Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  subject       Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapter       Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  examQuestions ExamQuestion[]
+
+  @@index([subjectId])
+  @@index([chapterId])
+  @@map("exams")
+}
+
+model ExamQuestion {
+  id         String   @id @default(uuid())
+  examId     String
+  questionId String
+  orderIndex Int
+  createdAt  DateTime @default(now())
+
+  exam     Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  question GeneratedQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([examId, questionId])
+  @@index([examId])
+  @@index([questionId])
+  @@map("exam_questions")
 }
