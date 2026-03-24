@@ -1,6 +1,11 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { ChatOllama } from '@langchain/ollama';
+import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { Annotation, StateGraph } from '@langchain/langgraph';
+import { ConfigService } from '@nestjs/config';
+import {
+  createQuestionLlm,
+  type QuestionLlmProvider,
+} from '../factories/create-question-llm.factory';
 import { ChapterRetrievalService } from './chapter-retrieval.service';
 import { QuestionPromptService } from './question-prompt.service';
 import {
@@ -9,7 +14,6 @@ import {
   GeneratedQuestion,
   RetrievedChunk,
 } from '../types/question.types';
-import { ConfigService } from '@nestjs/config';
 
 // Annotation is used to define the schema of graph state
 const QuestionGenerationState = Annotation.Root({
@@ -26,24 +30,17 @@ const QuestionGenerationState = Annotation.Root({
 
 @Injectable()
 export class QuestionGenerationGraphService {
-  private readonly llm: ChatOllama;
+  private readonly llm: BaseChatModel;
+  private readonly llmProvider: QuestionLlmProvider;
 
   constructor(
     private readonly chapterRetrievalService: ChapterRetrievalService,
     private readonly questionPromptService: QuestionPromptService,
     private readonly configService: ConfigService,
   ) {
-    const model = configService.getOrThrow<string>('OLLAMA_MODEL');
-    const baseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
-    let temperature = configService.getOrThrow<number>('OLLAMA_TEMPERATURE');
-    if (typeof temperature == 'string') {
-      temperature = Number(temperature);
-    }
-    this.llm = new ChatOllama({
-      model,
-      baseUrl,
-      temperature,
-    });
+    const { llm, provider } = createQuestionLlm(configService);
+    this.llm = llm;
+    this.llmProvider = provider;
   }
 
   async run(input: {
@@ -89,7 +86,9 @@ export class QuestionGenerationGraphService {
             typeof response.content === 'string' ? response.content : '';
         } catch {
           throw new ServiceUnavailableException(
-            'Failed to generate questions from Ollama.',
+            this.llmProvider === 'gemini'
+              ? 'Failed to generate questions from Gemini.'
+              : 'Failed to generate questions from Ollama.',
           );
         }
 
@@ -138,13 +137,13 @@ export class QuestionGenerationGraphService {
       parsed = JSON.parse(normalized);
     } catch {
       throw new ServiceUnavailableException(
-        'Ollama returned invalid JSON for generated questions.',
+        'The model returned invalid JSON for generated questions.',
       );
     }
 
     if (!Array.isArray(parsed)) {
       throw new ServiceUnavailableException(
-        'Ollama response must be a JSON array of questions.',
+        'The model response must be a JSON array of questions.',
       );
     }
 
