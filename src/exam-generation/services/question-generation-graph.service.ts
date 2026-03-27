@@ -14,6 +14,7 @@ import {
   GeneratedQuestion,
   RetrievedChunk,
 } from '../types/question.types';
+import { QuestionValidationService } from './question-validation.service';
 
 // Annotation is used to define the schema of graph state
 const QuestionGenerationState = Annotation.Root({
@@ -37,6 +38,7 @@ export class QuestionGenerationGraphService {
     private readonly chapterRetrievalService: ChapterRetrievalService,
     private readonly questionPromptService: QuestionPromptService,
     private readonly configService: ConfigService,
+    private readonly questionValidationService: QuestionValidationService,
   ) {
     const { llm, provider } = createQuestionLlm(configService);
     this.llm = llm;
@@ -96,6 +98,15 @@ export class QuestionGenerationGraphService {
           content,
           state.numQuestions,
         );
+
+        const { isValid, issues } =
+          this.questionValidationService.validateQuestions(parsed);
+        if (!isValid) {
+          throw new ServiceUnavailableException(
+            `Validation failed for ${issues.length} of ${parsed.length} generated questions.`,
+          );
+        }
+
         return {
           rawModelOutput: content,
           questions: parsed,
@@ -159,6 +170,7 @@ export class QuestionGenerationGraphService {
       const question = record.question;
       const options = record.options;
       const answer = record.answer;
+      const correctOptionsRaw = record.correctOptions;
       const difficulty = record.difficulty;
 
       if (typeof question !== 'string' || !question.trim()) {
@@ -182,9 +194,26 @@ export class QuestionGenerationGraphService {
       }
       if (typeof answer !== 'string' || !answer.trim()) {
         throw new ServiceUnavailableException(
-          'Question answer is missing or invalid.',
+          'Question answer (direct explanation) is missing or invalid.',
         );
       }
+      if (
+        !Array.isArray(correctOptionsRaw) ||
+        correctOptionsRaw.length !== 1 ||
+        typeof correctOptionsRaw[0] !== 'string' ||
+        !correctOptionsRaw[0].trim()
+      ) {
+        throw new ServiceUnavailableException(
+          'Each question must include correctOptions as an array of exactly one non-empty string.',
+        );
+      }
+      const correctOption = correctOptionsRaw[0];
+      if (!options.includes(correctOption)) {
+        throw new ServiceUnavailableException(
+          'Each correctOptions entry must match one option verbatim.',
+        );
+      }
+      const correctOptions = [correctOption];
       if (typeof difficulty !== 'string' || !validDifficulty.has(difficulty)) {
         throw new ServiceUnavailableException(
           'Question difficulty must be easy, medium, or hard.',
@@ -194,7 +223,8 @@ export class QuestionGenerationGraphService {
       return {
         question,
         options: options as [string, string, string, string],
-        answer,
+        answer: answer.trim(),
+        correctOptions,
         difficulty,
       } as GeneratedQuestion;
     });
