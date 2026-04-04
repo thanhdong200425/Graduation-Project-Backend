@@ -242,7 +242,7 @@ describe('QuestionValidationService', () => {
         issues: ['OPTIONS_DUPLICATE'],
       });
       expect(console.log).toHaveBeenCalledWith(
-        `Current question ${questionWithDuplicate.question} has duplicate options.`,
+        `Question 1 ("${questionWithDuplicate.question.substring(0, 50)}...") has duplicate options.`,
       );
     });
 
@@ -272,7 +272,7 @@ describe('QuestionValidationService', () => {
       expect(result.issues).toEqual(['OPTIONS_DUPLICATE', 'OPTIONS_DUPLICATE']);
     });
 
-    it('detects duplicate when a later question repeats a normalized option from an earlier question', () => {
+    it('returns valid when different questions share a normalized option text', () => {
       const shared = 'shared option text';
       const q1: GeneratedQuestion = {
         ...baseQuestion,
@@ -287,12 +287,10 @@ describe('QuestionValidationService', () => {
       const result = validateOptionsDuplicate([q1, q2]);
 
       expect(result).toEqual({
-        isValid: false,
-        issues: ['OPTIONS_DUPLICATE'],
+        isValid: true,
+        issues: [],
       });
-      expect(console.log).toHaveBeenCalledWith(
-        `Current question ${q2.question} has duplicate options.`,
-      );
+      expect(console.log).not.toHaveBeenCalled();
     });
 
     it('returns valid for an empty question list', () => {

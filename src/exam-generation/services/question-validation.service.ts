@@ -105,14 +105,14 @@ export class QuestionValidationService {
     questions: GeneratedQuestion[],
   ): QuestionValidationResult {
     const currentIssues: QuestionValidationIssues[] = [];
-    const optionSet = new Set<string>();
-    for (const question of questions) {
+    for (const [index, question] of questions.entries()) {
+      const optionSet = new Set<string>();
       for (const option of question.options) {
         const normalized = option.trim().toLowerCase();
         if (optionSet.has(normalized)) {
           currentIssues.push('OPTIONS_DUPLICATE');
           console.log(
-            `Current question ${question.question} has duplicate options.`,
+            `Question ${index + 1} ("${question.question.substring(0, 50)}...") has duplicate options.`,
           );
         }
         optionSet.add(normalized);

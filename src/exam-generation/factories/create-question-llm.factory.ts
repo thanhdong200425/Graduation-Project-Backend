@@ -1,7 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { ChatOllama } from '@langchain/ollama';
-import { ChatGoogle } from '@langchain/google';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 
 export type QuestionLlmProvider = 'ollama' | 'gemini';
 
@@ -29,9 +29,9 @@ export function createQuestionLlm(configService: ConfigService): {
   if (modelType === 'API') {
     const apiKey = configService.getOrThrow<string>('GEMINI_API_KEY');
     const model =
-      configService.get<string>('GEMINI_MODEL')?.trim() ?? 'gemini-2.0-flash';
+      configService.get<string>('GEMINI_MODEL')?.trim() ?? 'gemini-2.5-flash';
 
-    const llm = new ChatGoogle({
+    const llm = new ChatGoogleGenerativeAI({
       apiKey,
       model,
     });

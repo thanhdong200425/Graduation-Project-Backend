@@ -26,11 +26,13 @@
   "dependencies": {
     "@langchain/core": "^1.1.33",
     "@langchain/google": "^0.1.8",
+    "@langchain/google-genai": "^2.1.26",
     "@langchain/langgraph": "^1.2.3",
     "@langchain/ollama": "^1.2.6",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/jwt": "^11.0.2",
+    "@nestjs/mapped-types": "^2.1.1",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@prisma/adapter-pg": "^7.3.0",
