@@ -86,7 +86,11 @@ export class QuestionGenerationGraphService {
           const response = await this.llm.invoke(state.prompt);
           content =
             typeof response.content === 'string' ? response.content : '';
-        } catch {
+        } catch (error: any) {
+          console.error('[CRITICAL ERROR] Gemini/Ollama execution failed:', error);
+          if (error.response) {
+            console.error('[DETAILS] Response Data:', JSON.stringify(error.response.data, null, 2));
+          }
           throw new ServiceUnavailableException(
             this.llmProvider === 'gemini'
               ? 'Failed to generate questions from Gemini.'
@@ -102,8 +106,14 @@ export class QuestionGenerationGraphService {
         const { isValid, issues } =
           this.questionValidationService.validateQuestions(parsed);
         if (!isValid) {
+          const uniqueIssues = [...new Set(issues)];
+          const issueSummary = uniqueIssues.join(', ');
+          console.error('[VALIDATION FAILED]', {
+            numQuestions: parsed.length,
+            issues: uniqueIssues,
+          });
           throw new ServiceUnavailableException(
-            `Validation failed for ${issues.length} of ${parsed.length} generated questions.`,
+            `Validation failed: [${issueSummary}] found in ${parsed.length} generated questions.`,
           );
         }
 

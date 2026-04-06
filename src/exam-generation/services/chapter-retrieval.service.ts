@@ -1,32 +1,50 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { OllamaEmbeddings } from '@langchain/ollama';
+import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import { RetrievedChunk } from '../types/question.types';
 import { ConfigService } from '@nestjs/config';
+import { Embeddings } from '@langchain/core/embeddings';
 
 @Injectable()
 export class ChapterRetrievalService {
   private readonly qdrantClient: QdrantClient;
   private readonly collectionName: string;
-  private readonly embeddings: OllamaEmbeddings;
+  private readonly embeddings: Embeddings;
 
   constructor(private configService: ConfigService) {
     const qdrantUrl = configService.getOrThrow<string>('QDRANT_URL');
     const qdrantApiKey = configService.getOrThrow<string>('QDRANT_API_KEY');
-    const ollamaBaseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
-    const embeddingModel = configService.getOrThrow<string>(
-      'OLLAMA_EMBEDDING_MODEL',
-    );
+    const modelType = (configService.get<string>('MODEL_TYPE') ?? 'OLLAMA')
+      .trim()
+      .toUpperCase();
 
     this.collectionName = configService.getOrThrow('QDRANT_COLLECTION');
     this.qdrantClient = new QdrantClient({
       url: qdrantUrl,
       apiKey: qdrantApiKey,
     });
-    this.embeddings = new OllamaEmbeddings({
-      model: embeddingModel,
-      baseUrl: ollamaBaseUrl,
-    });
+
+    if (modelType === 'API') {
+      const apiKey = configService.getOrThrow<string>('GEMINI_API_KEY');
+      const model =
+        configService.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ??
+        'text-embedding-004';
+
+      this.embeddings = new GoogleGenerativeAIEmbeddings({
+        apiKey,
+        modelName: model,
+      });
+    } else {
+      const ollamaBaseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
+      const embeddingModel = configService.getOrThrow<string>(
+        'OLLAMA_EMBEDDING_MODEL',
+      );
+      this.embeddings = new OllamaEmbeddings({
+        model: embeddingModel,
+        baseUrl: ollamaBaseUrl,
+      });
+    }
   }
 
   async retrieveTopChunks(params: {
@@ -40,7 +58,8 @@ export class ChapterRetrievalService {
     let embedding: number[];
     try {
       embedding = await this.embeddings.embedQuery(query);
-    } catch {
+    } catch (e) {
+      console.error('Embedding error:', e);
       throw new ServiceUnavailableException(
         'Failed to create embedding for chapter query.',
       );

@@ -482,6 +482,11 @@
     "@eslint/core" "^0.17.0"
     levn "^0.4.1"
 
+"@google/generative-ai@^0.24.0":
+  version "0.24.1"
+  resolved "https://registry.yarnpkg.com/@google/generative-ai/-/generative-ai-0.24.1.tgz#634a3c06f8ea7a6125c1b0d6c1e66bb11afb52c9"
+  integrity sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q==
+
 "@hono/node-server@1.19.9":
   version "1.19.9"
   resolved "https://registry.npmjs.org/@hono/node-server/-/node-server-1.19.9.tgz"
@@ -998,6 +1003,14 @@
     uuid "^11.1.0"
     zod "^3.25.76 || ^4"
 
+"@langchain/google-genai@^2.1.26":
+  version "2.1.26"
+  resolved "https://registry.yarnpkg.com/@langchain/google-genai/-/google-genai-2.1.26.tgz#9f758cbc595e6c93b875bcd73dfc1c257908c1f8"
+  integrity sha512-202ZBVEIXxKhNbDzktLKSffb9pNfrYBGPV7j54nvAR0uqfoh5reRlX8wmOZEDflojvX/GHc69jTOsc0eZKgRsA==
+  dependencies:
+    "@google/generative-ai" "^0.24.0"
+    uuid "^11.1.0"
+
 "@langchain/google@^0.1.8":
   version "0.1.8"
   resolved "https://registry.yarnpkg.com/@langchain/google/-/google-0.1.8.tgz#451844eb2cecda2e830bf5485c71d5f5cf16417b"
@@ -1162,6 +1175,11 @@
   dependencies:
     "@types/jsonwebtoken" "9.0.10"
     jsonwebtoken "9.0.3"
+
+"@nestjs/mapped-types@^2.1.1":
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/@nestjs/mapped-types/-/mapped-types-2.1.1.tgz#9530ac3250ab433ba6ef831e9dd5d483f5fc8144"
+  integrity sha512-SCCoMEJ6jdeI5h/N+KCVF1+pmg/hmEkNA5nHTS8Gvww7T/LCl4o1gFLinw2iQ60w7slFkszHcGLKGdazVI4F8A==
 
 "@nestjs/passport@^11.0.5":
   version "11.0.5"
