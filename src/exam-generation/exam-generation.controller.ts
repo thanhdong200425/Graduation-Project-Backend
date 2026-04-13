@@ -3,11 +3,15 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GenerateQuestionsDto } from './dto/generate-questions.dto';
 import { ExamGenerationService } from './exam-generation.service';
 import { GeneratedQuestion } from './types/question.types';
+import { ChapterRetrievalService } from './services/chapter-retrieval.service';
 
 // @UseGuards(JwtAuthGuard)
 @Controller()
 export class ExamGenerationController {
-  constructor(private readonly examGenerationService: ExamGenerationService) {}
+  constructor(
+    private readonly examGenerationService: ExamGenerationService,
+    private readonly chapterRetrievalService: ChapterRetrievalService,
+  ) {}
 
   @Post('generate-questions')
   async generateQuestions(

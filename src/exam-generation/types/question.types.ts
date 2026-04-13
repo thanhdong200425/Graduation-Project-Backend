@@ -32,3 +32,8 @@ export interface GenerateQuestionsInput {
   numQuestions: number;
   difficultyDist: DifficultyDistribution;
 }
+
+export interface ChunkScore {
+  chunkContent: string;
+  score: number;
+}

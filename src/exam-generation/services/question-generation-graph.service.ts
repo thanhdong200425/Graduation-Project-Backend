@@ -9,6 +9,7 @@ import {
 import { ChapterRetrievalService } from './chapter-retrieval.service';
 import { QuestionPromptService } from './question-prompt.service';
 import {
+  ChunkScore,
   DifficultyCounts,
   DifficultyDistribution,
   GeneratedQuestion,
@@ -27,12 +28,15 @@ const QuestionGenerationState = Annotation.Root({
   prompt: Annotation<string>,
   rawModelOutput: Annotation<string>,
   questions: Annotation<GeneratedQuestion[]>,
+  query: Annotation<string>,
+  chunksScore: Annotation<ChunkScore[]>,
 });
 
 @Injectable()
 export class QuestionGenerationGraphService {
   private readonly llm: BaseChatModel;
   private readonly llmProvider: QuestionLlmProvider;
+  private readonly rerankServiceBaseUrl: string;
 
   constructor(
     private readonly chapterRetrievalService: ChapterRetrievalService,
@@ -43,6 +47,8 @@ export class QuestionGenerationGraphService {
     const { llm, provider } = createQuestionLlm(configService);
     this.llm = llm;
     this.llmProvider = provider;
+    this.rerankServiceBaseUrl =
+      configService.getOrThrow<string>('FASTAPI_BASE_URL');
   }
 
   async run(input: {
@@ -62,6 +68,12 @@ export class QuestionGenerationGraphService {
       );
 
     const graph = new StateGraph(QuestionGenerationState)
+      // TEMPORARY NODE: Query builder (Huong will put the real query builder here)
+      .addNode('buildQuery', (state) => {
+        const query = `Subject ${state.subjectCode}, chapter ${state.chapterNo}`;
+        console.log('Query:', query);
+        return { query };
+      })
       .addNode('retrieveContext', async (state) => {
         const chunks = await this.chapterRetrievalService.retrieveTopChunks({
           subjectCode: state.subjectCode,
@@ -69,6 +81,51 @@ export class QuestionGenerationGraphService {
           topK: 5,
         });
         return { chunks };
+      })
+      .addNode('gradeChunks', async (state) => {
+        const response = await fetch(
+          `${this.rerankServiceBaseUrl}/chunks-rerank`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              query: state.query,
+              chunks: state.chunks ?? [],
+            }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new ServiceUnavailableException(
+            `Failed to rerank chunks from ${this.rerankServiceBaseUrl}/chunks-rerank.`,
+          );
+        }
+
+        const payload: unknown = await response.json();
+        const rerankResults = this.extractRerankResults(payload);
+        if (!rerankResults) {
+          throw new ServiceUnavailableException(
+            'The rerank service returned an invalid response.',
+          );
+        }
+
+        const rerankedChunks = rerankResults
+          .map((item) =>
+            state.chunks?.find((chunk) => chunk.content === item.content),
+          )
+          .filter((chunk): chunk is RetrievedChunk => chunk !== undefined);
+
+        const chunksScore = rerankResults.map((item) => ({
+          chunkContent: item.content,
+          score: item.score,
+        }));
+
+        console.log('Reranked Chunks:', { rerankedChunks });
+        console.log('Chunks Score:', { chunksScore });
+
+        return { chunks: rerankedChunks, chunksScore };
       })
       .addNode('buildPrompt', (state) => {
         const prompt = this.questionPromptService.buildPrompt({
@@ -86,10 +143,24 @@ export class QuestionGenerationGraphService {
           const response = await this.llm.invoke(state.prompt);
           content =
             typeof response.content === 'string' ? response.content : '';
-        } catch (error: any) {
-          console.error('[CRITICAL ERROR] Gemini/Ollama execution failed:', error);
-          if (error.response) {
-            console.error('[DETAILS] Response Data:', JSON.stringify(error.response.data, null, 2));
+        } catch (error: unknown) {
+          console.error(
+            '[CRITICAL ERROR] Gemini/Ollama execution failed:',
+            error,
+          );
+          if (
+            typeof error === 'object' &&
+            error !== null &&
+            'response' in error
+          ) {
+            console.error(
+              '[DETAILS] Response Data:',
+              JSON.stringify(
+                (error as { response?: { data?: unknown } }).response?.data,
+                null,
+                2,
+              ),
+            );
           }
           throw new ServiceUnavailableException(
             this.llmProvider === 'gemini'
@@ -122,8 +193,10 @@ export class QuestionGenerationGraphService {
           questions: parsed,
         };
       })
-      .addEdge('__start__', 'retrieveContext')
-      .addEdge('retrieveContext', 'buildPrompt')
+      .addEdge('__start__', 'buildQuery')
+      .addEdge('buildQuery', 'retrieveContext')
+      .addEdge('retrieveContext', 'gradeChunks')
+      .addEdge('gradeChunks', 'buildPrompt')
       .addEdge('buildPrompt', 'generateQuestions')
       .addEdge('generateQuestions', '__end__')
       .compile();
@@ -138,9 +211,41 @@ export class QuestionGenerationGraphService {
       prompt: '',
       rawModelOutput: '',
       questions: [],
+      query: '',
+      chunksScore: [],
     });
 
+    // Graph stops after gradeChunks; restore buildPrompt/generateQuestions to return real questions.
     return result.questions;
+  }
+
+  private extractRerankResults(
+    payload: unknown,
+  ): Array<{ content: string; score: number }> | null {
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      !('results' in payload) ||
+      !Array.isArray((payload as { results?: unknown }).results)
+    ) {
+      return null;
+    }
+
+    const results = (
+      payload as { results: Array<{ content?: unknown; score?: unknown }> }
+    ).results;
+
+    const normalized = results
+      .filter(
+        (item): item is { content: string; score: number } =>
+          typeof item.content === 'string' && typeof item.score === 'number',
+      )
+      .map((item) => ({
+        content: item.content,
+        score: item.score,
+      }));
+
+    return normalized;
   }
 
   private parseAndValidateQuestions(
