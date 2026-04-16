@@ -108,7 +108,7 @@ export class QuestionValidationService {
     for (const [index, question] of questions.entries()) {
       const optionSet = new Set<string>();
       for (const option of question.options) {
-        const normalized = option.trim().toLowerCase();
+        const normalized = option.trim();
         if (optionSet.has(normalized)) {
           currentIssues.push('OPTIONS_DUPLICATE');
           console.log(

@@ -24,4 +24,16 @@ export class ChaptersService {
       where: { id },
     });
   }
+
+  async findOneByOrder(
+    subjectId: string,
+    orderIndex: number,
+  ): Promise<Chapter | null> {
+    return this.prisma.chapter.findFirst({
+      where: {
+        subjectId,
+        orderIndex,
+      },
+    });
+  }
 }

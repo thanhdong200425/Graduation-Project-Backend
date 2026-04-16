@@ -15,6 +15,7 @@ import {
   RetrievedChunk,
 } from '../types/question.types';
 import { QuestionValidationService } from './question-validation.service';
+import { saveRagTrace } from '../utils/rag-trace.util';
 
 // Annotation is used to define the schema of graph state
 const QuestionGenerationState = Annotation.Root({
@@ -97,6 +98,8 @@ export class QuestionGenerationGraphService {
               : 'Failed to generate questions from Ollama.',
           );
         }
+
+        this.captureRawOutput(content, state);
 
         const parsed = this.parseAndValidateQuestions(
           content,
@@ -246,5 +249,15 @@ export class QuestionGenerationGraphService {
     }
 
     return validated;
+  }
+
+  private captureRawOutput(content: string, state: any) {
+    saveRagTrace({
+      params: {
+        subjectCode: state.subjectCode,
+        chapterNo: state.chapterNo,
+      },
+      rawModelOutput: content,
+    });
   }
 }

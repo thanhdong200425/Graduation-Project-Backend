@@ -6,9 +6,12 @@ import { QuestionGenerationGraphService } from './services/question-generation-g
 import { QuestionPromptService } from './services/question-prompt.service';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionValidationService } from './services/question-validation.service';
+import { QueryBuilderService } from './services/query-builder.service';
+import { SubjectsModule } from '../subjects/subjects.module';
+import { ChaptersModule } from '../chapters/chapters.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, SubjectsModule, ChaptersModule],
   controllers: [ExamGenerationController],
   providers: [
     ExamGenerationService,
@@ -16,6 +19,7 @@ import { QuestionValidationService } from './services/question-validation.servic
     QuestionPromptService,
     QuestionGenerationGraphService,
     QuestionValidationService,
+    QueryBuilderService,
   ],
 })
 export class ExamGenerationModule {}

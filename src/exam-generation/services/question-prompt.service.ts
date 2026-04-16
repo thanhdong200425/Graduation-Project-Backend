@@ -105,6 +105,7 @@ export class QuestionPromptService {
       `Difficulty counts must be exactly: easy=${params.difficultyCounts.easy}, medium=${params.difficultyCounts.medium}, hard=${params.difficultyCounts.hard}.`,
       'Use only the provided context. Do not invent facts not present in context.',
       'Each question must have exactly 4 options in an array and exactly 1 correct option.',
+      'CRITICAL: All 4 options in the "options" array MUST be unique. Do not repeat the same text, meaning, or formatting in different options.',
       'Field "answer" must be a short direct answer or key explanation in Vietnamese — not the text of a choice.',
       'Field "correctOptions" must be a JSON array with exactly one string: the correct choice copied verbatim from "options".',
       'Remember to transform your response into Vietnamese',
