@@ -11,6 +11,7 @@ import { ExamsModule } from './exams/exams.module';
 import { ExamQuestionsModule } from './exam-questions/exam-questions.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { ChaptersModule } from './chapters/chapters.module';
+import { UploadModule } from './upload/upload.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ChaptersModule } from './chapters/chapters.module';
     SubjectsModule,
     ChaptersModule,
     ConfigModule.forRoot(),
+    UploadModule,
   ],
   controllers: [AppController],
   providers: [AppService],

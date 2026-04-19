@@ -7,12 +7,28 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
   passwordHash String
   name         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  pdfUploads   PdfUpload[]
+}
+
+model PdfUpload {
+  id           String          @id @default(uuid())
+  uploadedById String
+  fileName     String
+  fileHash     String          @unique
+  filePath     String
+  status       PdfUploadStatus @default(PENDING)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  uploadedBy   User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@index([uploadedById])
+  @@map("pdf_uploads")
 }
 
 model Subject {
@@ -131,4 +147,10 @@ enum QuestionStatus {
   DRAFT
   APPROVED
   REJECTED
+}
+
+enum PdfUploadStatus {
+  PENDING
+  INDEXED
+  FAILED
 }
