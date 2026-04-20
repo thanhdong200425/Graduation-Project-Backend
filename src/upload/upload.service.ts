@@ -5,12 +5,16 @@ import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { PdfUploadResponseDto } from './upload.dto';
+import { PdfPipelineService } from './pdf/pdf-pipiline.service';
 
 const UPLOAD_DIR = join(process.cwd(), 'public', 'userUploads');
 
 @Injectable()
 export class UploadService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pdfPipeline: PdfPipelineService,
+  ) {}
 
   async uploadPdf(
     file: Express.Multer.File,
@@ -21,6 +25,7 @@ export class UploadService {
     const existing: PdfUpload | null = await this.prisma.pdfUpload.findUnique({
       where: { fileHash },
     });
+
     if (existing) {
       throw new ConflictException(
         'Duplicate file hash already indexed for this chapter',
@@ -43,6 +48,8 @@ export class UploadService {
         filePath,
       },
     });
+
+    await this.pdfPipeline.parsePdf(record.id);
 
     return {
       id: record.id,
