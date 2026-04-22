@@ -39,7 +39,10 @@ export class QuestionsService {
     });
   }
 
-  async update(id: string, data: Prisma.GeneratedQuestionUpdateInput): Promise<GeneratedQuestion> {
+  async update(
+    id: string,
+    data: Prisma.GeneratedQuestionUpdateInput,
+  ): Promise<GeneratedQuestion> {
     return this.prisma.generatedQuestion.update({
       where: { id },
       data,

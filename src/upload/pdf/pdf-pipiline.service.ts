@@ -1,17 +1,12 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
 import { OllamaEmbeddings } from '@langchain/ollama';
 import { Embeddings } from '@langchain/core/embeddings';
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { Collection, MongoClient } from 'mongodb';
 import { PDFParse } from 'pdf-parse';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MongodbService } from '../../mongodb/mongodb.service';
 
 export interface ParsedPdfResult {
   pdfUploadId: string;
@@ -20,19 +15,17 @@ export interface ParsedPdfResult {
 }
 
 @Injectable()
-export class PdfPipelineService implements OnModuleInit, OnModuleDestroy {
+export class PdfPipelineService {
   private readonly logger = new Logger(PdfPipelineService.name);
 
   private readonly qdrantClient: QdrantClient;
   private readonly collectionName: string;
   private readonly embeddings: Embeddings;
 
-  private mongoClient!: MongoClient;
-  private mongoCollection!: Collection;
-
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
+    config: ConfigService,
+    private readonly mongodb: MongodbService,
   ) {
     this.qdrantClient = new QdrantClient({
       url: config.getOrThrow<string>('QDRANT_URL'),
@@ -57,27 +50,6 @@ export class PdfPipelineService implements OnModuleInit, OnModuleDestroy {
         baseUrl: config.getOrThrow<string>('OLLAMA_BASE_URL'),
       });
     }
-  }
-
-  async onModuleInit() {
-    const uri = this.config.getOrThrow<string>('MONGO_URI');
-    const dbName = this.config.getOrThrow<string>('MONGO_INITDB_DATABASE');
-    const collectionName = this.config.getOrThrow<string>('MONGO_COLLECTION');
-
-    // Ensure MongoDB is initialized
-    this.mongoClient = new MongoClient(uri);
-    await this.mongoClient.connect();
-    this.mongoCollection = this.mongoClient
-      .db(dbName)
-      .collection(collectionName);
-    this.logger.log('MongoDB connected');
-
-    // Ensure Qdrant is initialized
-  }
-
-  async onModuleDestroy() {
-    await this.mongoClient?.close();
-    this.logger.log('MongoDB disconnected');
   }
 
   async parsePdf(
@@ -105,11 +77,14 @@ export class PdfPipelineService implements OnModuleInit, OnModuleDestroy {
         numPages: pdfText.pages.length,
       });
 
-      console.log('Chunking text');
       const chunks = this.chunkText(cleanedData.text);
-      console.log('Created chunk text');
 
-      await this.saveChunksToMongo(chunks, chapterId ?? '', pdfUploadId);
+      await this.mongodb.saveChunksToMongo({
+        chunks,
+        chapterId: chapterId ?? '',
+        pdfUploadId,
+      });
+
       await this.embedAndUpsert(
         chunks,
         chapter?.subject.name ?? '',
@@ -144,29 +119,6 @@ export class PdfPipelineService implements OnModuleInit, OnModuleDestroy {
     return chunks;
   }
 
-  private async saveChunksToMongo(
-    chunks: string[],
-    chapterId: string,
-    pdfUploadId: string,
-  ): Promise<void> {
-    try {
-      console.log('Saving chunk to MongoDB');
-      const docs = chunks.map((content, index) => ({
-        chapterId,
-        pdfUploadId,
-        chunkIndex: index,
-        content,
-        createdAt: new Date(),
-      }));
-
-      await this.mongoCollection.insertMany(docs);
-      console.log('Saved chunks to MongoDB');
-    } catch (error) {
-      console.log('Error in saving chunks to mongoDB()');
-      throw error;
-    }
-  }
-
   private async embedAndUpsert(
     chunks: string[],
     subjectName: string,
@@ -179,11 +131,8 @@ export class PdfPipelineService implements OnModuleInit, OnModuleDestroy {
     }[] = [];
 
     try {
-      console.log('Embedding');
       for (const chunk of chunks) {
-        console.log('Creating vector');
         const vector = await this.embeddings.embedQuery(chunk);
-        console.log('Vector: ', JSON.stringify(vector));
         points.push({
           id: crypto.randomUUID(),
           vector,
@@ -196,9 +145,8 @@ export class PdfPipelineService implements OnModuleInit, OnModuleDestroy {
       }
 
       await this.qdrantClient.upsert(this.collectionName, { points });
-      console.log('Saved vector to qdrant');
     } catch (error) {
-      console.log('Error in embeding and saving vectors to Qdrant');
+      this.logger.error('Failed to embed and upsert vectors to Qdrant', error);
       throw error;
     }
   }

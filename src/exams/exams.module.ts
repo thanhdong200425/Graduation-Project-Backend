@@ -6,11 +6,7 @@ import { QuestionsModule } from '../questions/questions.module';
 import { ExamQuestionsModule } from '../exam-questions/exam-questions.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    QuestionsModule,
-    ExamQuestionsModule,
-  ],
+  imports: [PrismaModule, QuestionsModule, ExamQuestionsModule],
   controllers: [ExamsController],
   providers: [ExamsService],
   exports: [ExamsService],

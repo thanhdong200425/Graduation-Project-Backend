@@ -38,26 +38,32 @@ export class ExamsService {
       // 2. Process each question
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
-        
+
         // 2a. Create GeneratedQuestion using QuestionsService
-        const question = await this.questionsService.create({
-          question: q.question,
-          optionA: q.optionA,
-          optionB: q.optionB,
-          optionC: q.optionC,
-          optionD: q.optionD,
-          correctAnswer: q.correctAnswer,
-          difficulty: q.difficulty || 'MEDIUM',
-          chapter: { connect: { id: chapterId } },
-          status: 'APPROVED',
-        }, tx);
+        const question = await this.questionsService.create(
+          {
+            question: q.question,
+            optionA: q.optionA,
+            optionB: q.optionB,
+            optionC: q.optionC,
+            optionD: q.optionD,
+            correctAnswer: q.correctAnswer,
+            difficulty: q.difficulty || 'MEDIUM',
+            chapter: { connect: { id: chapterId } },
+            status: 'APPROVED',
+          },
+          tx,
+        );
 
         // 2b. Link Question to Exam via ExamQuestionsService
-        await this.examQuestionsService.create({
-          exam: { connect: { id: exam.id } },
-          question: { connect: { id: question.id } },
-          orderIndex: i + 1,
-        }, tx);
+        await this.examQuestionsService.create(
+          {
+            exam: { connect: { id: exam.id } },
+            question: { connect: { id: question.id } },
+            orderIndex: i + 1,
+          },
+          tx,
+        );
       }
 
       return tx.exam.findUnique({
