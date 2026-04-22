@@ -1,12 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { GoogleGenerativeAIEmbeddings } from '@langchain/google-genai';
-import { OllamaEmbeddings } from '@langchain/ollama';
-import { Embeddings } from '@langchain/core/embeddings';
-import { QdrantClient } from '@qdrant/js-client-rest';
 import { PDFParse } from 'pdf-parse';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MongodbService } from '../../mongodb/mongodb.service';
+import { QdrantService } from '../../qdrant/qdrant.service';
 
 export interface ParsedPdfResult {
   pdfUploadId: string;
@@ -18,39 +14,11 @@ export interface ParsedPdfResult {
 export class PdfPipelineService {
   private readonly logger = new Logger(PdfPipelineService.name);
 
-  private readonly qdrantClient: QdrantClient;
-  private readonly collectionName: string;
-  private readonly embeddings: Embeddings;
-
   constructor(
     private readonly prisma: PrismaService,
-    config: ConfigService,
     private readonly mongodb: MongodbService,
-  ) {
-    this.qdrantClient = new QdrantClient({
-      url: config.getOrThrow<string>('QDRANT_URL'),
-      apiKey: config.getOrThrow<string>('QDRANT_API_KEY'),
-    });
-    this.collectionName = config.getOrThrow<string>('QDRANT_COLLECTION');
-
-    const modelType = (config.get<string>('MODEL_TYPE') ?? 'OLLAMA')
-      .trim()
-      .toUpperCase();
-
-    if (modelType === 'API') {
-      this.embeddings = new GoogleGenerativeAIEmbeddings({
-        apiKey: config.getOrThrow<string>('GEMINI_API_KEY'),
-        modelName:
-          config.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ??
-          'text-embedding-004',
-      });
-    } else {
-      this.embeddings = new OllamaEmbeddings({
-        model: config.getOrThrow<string>('OLLAMA_EMBEDDING_MODEL'),
-        baseUrl: config.getOrThrow<string>('OLLAMA_BASE_URL'),
-      });
-    }
-  }
+    private readonly qdrant: QdrantService,
+  ) {}
 
   async parsePdf(
     pdfUploadId: string,
@@ -85,11 +53,11 @@ export class PdfPipelineService {
         pdfUploadId,
       });
 
-      await this.embedAndUpsert(
+      await this.qdrant.embedAndUpsert({
         chunks,
-        chapter?.subject.name ?? '',
-        chapter?.orderIndex ?? 0,
-      );
+        subjectName: chapter?.subject.name ?? '',
+        chapterIndex: chapter?.orderIndex ?? 0,
+      });
 
       await this.prisma.pdfUpload.update({
         where: { id: pdfUploadId },
@@ -117,38 +85,6 @@ export class PdfPipelineService {
     }
 
     return chunks;
-  }
-
-  private async embedAndUpsert(
-    chunks: string[],
-    subjectName: string,
-    chapterIndex: number,
-  ): Promise<void> {
-    const points: {
-      id: string;
-      vector: number[];
-      payload: Record<string, unknown>;
-    }[] = [];
-
-    try {
-      for (const chunk of chunks) {
-        const vector = await this.embeddings.embedQuery(chunk);
-        points.push({
-          id: crypto.randomUUID(),
-          vector,
-          payload: {
-            content: chunk,
-            subject: subjectName,
-            chapter: chapterIndex,
-          },
-        });
-      }
-
-      await this.qdrantClient.upsert(this.collectionName, { points });
-    } catch (error) {
-      this.logger.error('Failed to embed and upsert vectors to Qdrant', error);
-      throw error;
-    }
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
