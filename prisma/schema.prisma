@@ -19,6 +19,7 @@ model User {
 model PdfUpload {
   id           String          @id @default(uuid())
   uploadedById String
+  chapterId    String?
   fileName     String
   fileHash     String          @unique
   filePath     String
@@ -26,8 +27,10 @@ model PdfUpload {
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   uploadedBy   User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  chapter      Chapter?        @relation(fields: [chapterId], references: [id], onDelete: SetNull)
 
   @@index([uploadedById])
+  @@index([chapterId])
   @@map("pdf_uploads")
 }
 
@@ -56,6 +59,7 @@ model Chapter {
   exams              Exam[]
   generatedQuestions GeneratedQuestion[]
   textbookChunks     TextbookChunk[]
+  pdfUploads         PdfUpload[]
 
   @@index([subjectId])
   @@map("chapters")

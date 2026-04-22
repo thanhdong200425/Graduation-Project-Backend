@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   FileTypeValidator,
   HttpCode,
@@ -16,6 +17,7 @@ import { memoryStorage } from 'multer';
 import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { PdfUploadResponseDto } from './upload.dto';
+import { UploadPdfBodyDto } from './upload.dto';
 import { UploadService } from './upload.service';
 
 const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -39,8 +41,13 @@ export class UploadController {
       }),
     )
     file: Express.Multer.File,
+    @Body() body: UploadPdfBodyDto,
     @Req() req: AuthRequest,
   ): Promise<PdfUploadResponseDto> {
-    return await this.uploadService.uploadPdf(file, req.user.id);
+    return await this.uploadService.uploadPdf(
+      file,
+      req.user.id,
+      body.chapterId ?? '',
+    );
   }
 }

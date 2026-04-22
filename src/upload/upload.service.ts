@@ -19,6 +19,7 @@ export class UploadService {
   async uploadPdf(
     file: Express.Multer.File,
     uploadedById: string,
+    chapterId: string | null,
   ): Promise<PdfUploadResponseDto> {
     const fileHash = createHash('sha256').update(file.buffer).digest('hex');
 
@@ -49,7 +50,15 @@ export class UploadService {
       },
     });
 
-    await this.pdfPipeline.parsePdf(record.id);
+    try {
+      await this.pdfPipeline.parsePdf(record.id, chapterId);
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+      await this.prisma.pdfUpload.update({
+        where: { id: record.id },
+        data: { status: 'FAILED' },
+      });
+    }
 
     return {
       id: record.id,
