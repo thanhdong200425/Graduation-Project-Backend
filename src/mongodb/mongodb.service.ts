@@ -62,7 +62,6 @@ export class MongodbService implements OnModuleInit, OnModuleDestroy {
       }));
 
       await this.mongoCollection.insertMany(docs);
-      console.log('Saved chunks to MongoDB');
       return { success: true };
     } catch (error) {
       console.log('Error in saving chunks to mongoDB(): ', error);
