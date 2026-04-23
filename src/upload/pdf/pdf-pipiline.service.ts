@@ -57,6 +57,7 @@ export class PdfPipelineService {
         chunks,
         subjectName: chapter?.subject.name ?? '',
         chapterIndex: chapter?.orderIndex ?? 0,
+        pdfUploadId,
       });
 
       await this.prisma.pdfUpload.update({

@@ -52,7 +52,18 @@ export class MongodbService implements OnModuleInit, OnModuleDestroy {
     payload: MongoDBChunkPayload,
   ): Promise<MongoDBChunkResponse> {
     const { chunks, chapterId, pdfUploadId } = payload;
+    // Check if the collection is exists before inserting
     try {
+      const existingCount = await this.mongoCollection.countDocuments({
+        pdfUploadId,
+      });
+      if (existingCount > 0) {
+        this.logger.log(
+          'These chunks have already been saved to MongoDB, skipping insertion',
+        );
+        return { success: true };
+      }
+
       const docs = chunks.map((content, index) => ({
         chapterId,
         pdfUploadId,

@@ -66,7 +66,7 @@ export class QdrantService implements OnModuleInit {
   }
 
   async embedAndUpsert(payload: QdrantUpsertPayload): Promise<void> {
-    const { chunks, subjectName, chapterIndex } = payload;
+    const { chunks, subjectName, chapterIndex, pdfUploadId } = payload;
     const points: {
       id: string;
       vector: number[];
@@ -74,6 +74,19 @@ export class QdrantService implements OnModuleInit {
     }[] = [];
 
     try {
+      const existingCount = await this.client.count(this.collectionName, {
+        filter: {
+          must: [{ key: 'pdfUploadId', match: { value: pdfUploadId } }],
+        },
+      });
+
+      if (existingCount.count > 0) {
+        this.logger.log(
+          'These vectors have already been upserted to Qdrant, skipping embedding and upserting',
+        );
+        return;
+      }
+
       for (const chunk of chunks) {
         const vector = await this.embeddings.embedQuery(chunk);
         points.push({
@@ -83,6 +96,7 @@ export class QdrantService implements OnModuleInit {
             content: chunk,
             subject: subjectName,
             chapter: chapterIndex,
+            pdfUploadId,
           },
         });
       }

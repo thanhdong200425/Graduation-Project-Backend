@@ -8,4 +8,5 @@ export interface QdrantUpsertPayload {
   chunks: string[];
   subjectName: string;
   chapterIndex: number;
+  pdfUploadId: string;
 }

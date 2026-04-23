@@ -34,8 +34,14 @@ export class UploadController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: MAX_PDF_SIZE }),
-          new FileTypeValidator({ fileType: 'application/pdf' }),
+          new MaxFileSizeValidator({
+            maxSize: MAX_PDF_SIZE,
+            errorMessage: `File size exceeds the limit of ${MAX_PDF_SIZE / (1024 * 1024)} MB`,
+          }),
+          new FileTypeValidator({
+            fileType: 'application/pdf',
+            errorMessage: 'Only PDF files are allowed',
+          }),
         ],
         errorHttpStatusCode: HttpStatus.BAD_REQUEST,
       }),
