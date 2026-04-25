@@ -24,6 +24,8 @@ model PdfUpload {
   fileHash     String          @unique
   filePath     String
   status       PdfUploadStatus @default(PENDING)
+  progress     Int             @default(0)
+  currentStep  CurrentStep     @default(PARSING)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
   uploadedBy   User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
@@ -157,4 +159,12 @@ enum PdfUploadStatus {
   PENDING
   INDEXED
   FAILED
+}
+
+enum CurrentStep {
+  PARSING
+  CHUNKING
+  EMBEDDING
+  STORING
+  DONE
 }

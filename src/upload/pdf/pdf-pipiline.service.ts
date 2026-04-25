@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { CurrentStep } from '@prisma/client';
 import { PDFParse } from 'pdf-parse';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MongodbService } from '../../mongodb/mongodb.service';
@@ -37,6 +38,7 @@ export class PdfPipelineService {
 
     try {
       const pdfParsed = new PDFParse({ url: record.filePath });
+      await this.updateProgress(pdfUploadId, 20, 'PARSING');
       const pdfText = await pdfParsed.getText();
 
       const cleanedData = await this.cleanParsedData({
@@ -45,14 +47,17 @@ export class PdfPipelineService {
         numPages: pdfText.pages.length,
       });
 
+      await this.updateProgress(pdfUploadId, 40, 'CHUNKING');
       const chunks = this.chunkText(cleanedData.text);
 
+      await this.updateProgress(pdfUploadId, 60, 'STORING');
       await this.mongodb.saveChunksToMongo({
         chunks,
         chapterId: chapterId ?? '',
         pdfUploadId,
       });
 
+      await this.updateProgress(pdfUploadId, 80, 'EMBEDDING');
       await this.qdrant.embedAndUpsert({
         chunks,
         subjectName: chapter?.subject.name ?? '',
@@ -60,14 +65,14 @@ export class PdfPipelineService {
         pdfUploadId,
       });
 
-      await this.prisma.pdfUpload.update({
-        where: { id: pdfUploadId },
-        data: { status: 'INDEXED' },
-      });
-
+      await this.updateProgress(pdfUploadId, 100, 'DONE');
       return cleanedData;
     } catch (error) {
       this.logger.error(`Failed to process PDF ${record.fileName}`, error);
+      await this.prisma.pdfUpload.update({
+        where: { id: pdfUploadId },
+        data: { status: 'FAILED' },
+      });
       throw error;
     }
   }
@@ -104,5 +109,26 @@ export class PdfPipelineService {
       ...parsedData,
       text: cleanedText,
     };
+  }
+
+  async updateProgress(
+    id: string,
+    progress: number,
+    currentStep: CurrentStep,
+  ): Promise<void> {
+    try {
+      await this.prisma.pdfUpload.update({
+        where: { id },
+        data: {
+          progress,
+          currentStep,
+          status: currentStep === 'DONE' ? 'INDEXED' : 'PENDING',
+        },
+      });
+    } catch (error) {
+      throw new Error(
+        `Failed to update progress for PDF upload ${id}: ${error}`,
+      );
+    }
   }
 }

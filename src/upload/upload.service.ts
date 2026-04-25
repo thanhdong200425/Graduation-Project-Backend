@@ -3,6 +3,7 @@ import { PdfUpload } from '@prisma/client';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import { checkFileIsExists } from '../../helpers/file';
 import { PrismaService } from '../prisma/prisma.service';
 import { PdfUploadResponseDto } from './upload.dto';
 import { PdfPipelineService } from './pdf/pdf-pipiline.service';
@@ -27,7 +28,6 @@ export class UploadService {
       where: { fileHash },
     });
 
-    // If a file with the same hash exists and is not marked as FAILED, throw a conflict error, otherwise continue to handle the new upload (re-uploading)
     if (record) {
       if (record.status !== 'FAILED') {
         throw new ConflictException(
@@ -41,7 +41,10 @@ export class UploadService {
 
       const savedName = `${fileHash}.pdf`;
       const filePath = join(UPLOAD_DIR, savedName);
-      writeFileSync(filePath, file.buffer);
+      const isFileExisted = await checkFileIsExists(UPLOAD_DIR, savedName);
+      if (!isFileExisted) {
+        writeFileSync(filePath, file.buffer);
+      }
 
       record = await this.prisma.pdfUpload.create({
         data: {
@@ -49,21 +52,8 @@ export class UploadService {
           fileName: file.originalname,
           fileHash,
           filePath,
+          ...(chapterId ? { chapterId } : {}),
         },
-      });
-    }
-
-    try {
-      await this.pdfPipeline.parsePdf(record.id, chapterId);
-      await this.prisma.pdfUpload.update({
-        where: { id: record.id },
-        data: { status: 'INDEXED' },
-      });
-    } catch (error) {
-      console.error('Error processing PDF:', error);
-      await this.prisma.pdfUpload.update({
-        where: { id: record.id },
-        data: { status: 'FAILED' },
       });
     }
 
@@ -73,5 +63,27 @@ export class UploadService {
       fileName: record.fileName,
       createdAt: record.createdAt,
     };
+  }
+
+  async handlePdfProcessing(uploadId: string): Promise<void> {
+    const record = await this.prisma.pdfUpload.findUnique({
+      where: { id: uploadId },
+    });
+
+    if (!record) {
+      throw new Error('PDF upload not found');
+    }
+
+    await this.pdfPipeline
+      .parsePdf(record.id, record.chapterId)
+      .catch((error) =>
+        console.error(`Error processing PDF ${record.fileName}:`, error),
+      );
+  }
+
+  async getStatus(uploadId: string): Promise<PdfUpload> {
+    return await this.prisma.pdfUpload.findUniqueOrThrow({
+      where: { id: uploadId },
+    });
   }
 }

@@ -2,9 +2,11 @@ import {
   Body,
   Controller,
   FileTypeValidator,
+  Get,
   HttpCode,
   HttpStatus,
   MaxFileSizeValidator,
+  Param,
   ParseFilePipe,
   Post,
   Req,
@@ -50,10 +52,28 @@ export class UploadController {
     @Body() body: UploadPdfBodyDto,
     @Req() req: AuthRequest,
   ): Promise<PdfUploadResponseDto> {
-    return await this.uploadService.uploadPdf(
+    const pdfUpload = await this.uploadService.uploadPdf(
       file,
       req.user.id,
-      body.chapterId ?? '',
+      body.chapterId ?? null,
     );
+
+    this.uploadService.handlePdfProcessing(pdfUpload.id).catch((error) => {
+      // Log the error but don't throw it, since the upload itself was successful
+      console.error(`Error processing PDF upload ${pdfUpload.id}:`, error);
+    });
+
+    return pdfUpload;
+  }
+
+  @Get(':id/status')
+  async getStatus(@Param('id') id: string) {
+    const upload = await this.uploadService.getStatus(id);
+    return {
+      id: upload.id,
+      status: upload.status,
+      currentStep: upload.currentStep,
+      progress: upload.progress,
+    };
   }
 }
