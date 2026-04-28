@@ -116,6 +116,59 @@ export class ChapterRetrievalService {
     }
   }
 
+  async retrieveChunksByUploadIds(params: {
+    uploadIds: string[];
+    topK?: number;
+  }): Promise<RetrievedChunk[]> {
+    const topK = params.topK ?? 10;
+    const query = 'exam questions from uploaded documents';
+
+    let embedding: number[];
+    try {
+      embedding = await this.embeddings.embedQuery(query);
+    } catch (e) {
+      console.error('Embedding error:', e);
+      throw new ServiceUnavailableException(
+        'Failed to create embedding for upload query.',
+      );
+    }
+
+    try {
+      const points = await this.qdrantClient.search(this.collectionName, {
+        vector: embedding,
+        limit: topK,
+        with_payload: true,
+        filter: {
+          should: params.uploadIds.map((id) => ({
+            key: 'pdfUploadId',
+            match: { value: id },
+          })),
+        },
+      });
+
+      const chunks: RetrievedChunk[] = [];
+      for (const point of points) {
+        const payload = point.payload as Record<string, unknown> | null;
+        if (!payload) continue;
+        const content = payload.content;
+        if (typeof content !== 'string' || !content.trim()) continue;
+        chunks.push({
+          content,
+          subject:
+            typeof payload.subject === 'string' ? payload.subject : undefined,
+          chapter:
+            typeof payload.chapter === 'number' ? payload.chapter : undefined,
+        });
+      }
+
+      return chunks;
+    } catch {
+      throw new ServiceUnavailableException(
+        'Failed to search upload content from Qdrant.',
+      );
+    }
+  }
+
   private buildChapterQuery(subjectCode: string, chapterNo: number): string {
     return `Subject ${subjectCode}, chapter ${chapterNo}`;
   }

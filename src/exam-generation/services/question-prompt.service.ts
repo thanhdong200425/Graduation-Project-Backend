@@ -92,16 +92,21 @@ export class QuestionPromptService {
     chunks: RetrievedChunk[];
     numQuestions: number;
     difficultyCounts: DifficultyCounts;
-    subjectCode: string;
-    chapterNo: number;
+    subjectCode?: string;
+    chapterNo?: number;
   }): string {
     const context = params.chunks
       .map((chunk, index) => `Chunk ${index + 1}:\n${chunk.content}`)
       .join('\n\n');
 
+    const scope =
+      params.subjectCode && params.chapterNo
+        ? `for subject ${params.subjectCode}, chapter ${params.chapterNo}`
+        : 'based on the provided content';
+
     return [
       'You are an exam question generator.',
-      `Generate exactly ${params.numQuestions} multiple-choice questions for subject ${params.subjectCode}, chapter ${params.chapterNo}.`,
+      `Generate exactly ${params.numQuestions} multiple-choice questions ${scope}.`,
       `Difficulty counts must be exactly: easy=${params.difficultyCounts.easy}, medium=${params.difficultyCounts.medium}, hard=${params.difficultyCounts.hard}.`,
       'Use only the provided context. Do not invent facts not present in context.',
       'Each question must have exactly 4 options in an array and exactly 1 correct option.',

@@ -17,10 +17,8 @@ import {
 } from '../types/question.types';
 import { QuestionValidationService } from './question-validation.service';
 
-// Annotation is used to define the schema of graph state
 const QuestionGenerationState = Annotation.Root({
-  subjectCode: Annotation<string>,
-  chapterNo: Annotation<number>,
+  uploadIds: Annotation<string[]>,
   numQuestions: Annotation<number>,
   difficultyDist: Annotation<DifficultyDistribution>,
   difficultyCounts: Annotation<DifficultyCounts>,
@@ -51,12 +49,20 @@ export class QuestionGenerationGraphService {
       configService.getOrThrow<string>('FASTAPI_BASE_URL');
   }
 
-  async run(input: {
-    subjectCode: string;
-    chapterNo: number;
-    numQuestions: number;
-    difficultyDist: DifficultyDistribution;
-  }): Promise<GeneratedQuestion[]> {
+  async run(
+    input: {
+      uploadIds: string[];
+      numQuestions: number;
+      difficultyDist: DifficultyDistribution;
+    },
+    options?: {
+      onProgress?: (progress: number) => Promise<void>;
+    },
+  ): Promise<GeneratedQuestion[]> {
+    const report = async (pct: number) => {
+      if (options?.onProgress) await options.onProgress(pct);
+    };
+
     const normalizedDist =
       this.questionPromptService.normalizeDifficultyDistribution(
         input.difficultyDist,
@@ -68,18 +74,19 @@ export class QuestionGenerationGraphService {
       );
 
     const graph = new StateGraph(QuestionGenerationState)
-      // TEMPORARY NODE: Query builder (Huong will put the real query builder here)
-      .addNode('buildQuery', (state) => {
-        const query = `Subject ${state.subjectCode}, chapter ${state.chapterNo}`;
+      .addNode('buildQuery', async (state) => {
+        const query = 'exam questions from uploaded documents';
         console.log('Query:', query);
+        await report(10);
         return { query };
       })
       .addNode('retrieveContext', async (state) => {
-        const chunks = await this.chapterRetrievalService.retrieveTopChunks({
-          subjectCode: state.subjectCode,
-          chapterNo: state.chapterNo,
-          topK: 5,
-        });
+        const chunks =
+          await this.chapterRetrievalService.retrieveChunksByUploadIds({
+            uploadIds: state.uploadIds,
+            topK: 10,
+          });
+        await report(30);
         return { chunks };
       })
       .addNode('gradeChunks', async (state) => {
@@ -87,9 +94,7 @@ export class QuestionGenerationGraphService {
           `${this.rerankServiceBaseUrl}/chunks-rerank`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               query: state.query,
               chunks: state.chunks ?? [],
@@ -122,19 +127,16 @@ export class QuestionGenerationGraphService {
           score: item.score,
         }));
 
-        console.log('Reranked Chunks:', { rerankedChunks });
-        console.log('Chunks Score:', { chunksScore });
-
+        await report(50);
         return { chunks: rerankedChunks, chunksScore };
       })
-      .addNode('buildPrompt', (state) => {
+      .addNode('buildPrompt', async (state) => {
         const prompt = this.questionPromptService.buildPrompt({
           chunks: state.chunks ?? [],
           numQuestions: state.numQuestions,
           difficultyCounts: state.difficultyCounts,
-          subjectCode: state.subjectCode,
-          chapterNo: state.chapterNo,
         });
+        await report(60);
         return { prompt };
       })
       .addNode('generateQuestions', async (state) => {
@@ -144,10 +146,7 @@ export class QuestionGenerationGraphService {
           content =
             typeof response.content === 'string' ? response.content : '';
         } catch (error: unknown) {
-          console.error(
-            '[CRITICAL ERROR] Gemini/Ollama execution failed:',
-            error,
-          );
+          console.error('[CRITICAL ERROR] LLM execution failed:', error);
           if (
             typeof error === 'object' &&
             error !== null &&
@@ -188,10 +187,8 @@ export class QuestionGenerationGraphService {
           );
         }
 
-        return {
-          rawModelOutput: content,
-          questions: parsed,
-        };
+        await report(90);
+        return { rawModelOutput: content, questions: parsed };
       })
       .addEdge('__start__', 'buildQuery')
       .addEdge('buildQuery', 'retrieveContext')
@@ -202,8 +199,7 @@ export class QuestionGenerationGraphService {
       .compile();
 
     const result = await graph.invoke({
-      subjectCode: input.subjectCode,
-      chapterNo: input.chapterNo,
+      uploadIds: input.uploadIds,
       numQuestions: input.numQuestions,
       difficultyDist: normalizedDist,
       difficultyCounts,
@@ -215,7 +211,6 @@ export class QuestionGenerationGraphService {
       chunksScore: [],
     });
 
-    // Graph stops after gradeChunks; restore buildPrompt/generateQuestions to return real questions.
     return result.questions;
   }
 
@@ -235,17 +230,12 @@ export class QuestionGenerationGraphService {
       payload as { results: Array<{ content?: unknown; score?: unknown }> }
     ).results;
 
-    const normalized = results
+    return results
       .filter(
         (item): item is { content: string; score: number } =>
           typeof item.content === 'string' && typeof item.score === 'number',
       )
-      .map((item) => ({
-        content: item.content,
-        score: item.score,
-      }));
-
-    return normalized;
+      .map((item) => ({ content: item.content, score: item.score }));
   }
 
   private parseAndValidateQuestions(
@@ -282,11 +272,13 @@ export class QuestionGenerationGraphService {
       }
 
       const record = item as Record<string, unknown>;
-      const question = record.question;
-      const options = record.options;
-      const answer = record.answer;
-      const correctOptionsRaw = record.correctOptions;
-      const difficulty = record.difficulty;
+      const {
+        question,
+        options,
+        answer,
+        correctOptions: correctOptionsRaw,
+        difficulty,
+      } = record;
 
       if (typeof question !== 'string' || !question.trim()) {
         throw new ServiceUnavailableException(
@@ -309,7 +301,7 @@ export class QuestionGenerationGraphService {
       }
       if (typeof answer !== 'string' || !answer.trim()) {
         throw new ServiceUnavailableException(
-          'Question answer (direct explanation) is missing or invalid.',
+          'Question answer is missing or invalid.',
         );
       }
       if (
@@ -328,7 +320,6 @@ export class QuestionGenerationGraphService {
           'Each correctOptions entry must match one option verbatim.',
         );
       }
-      const correctOptions = [correctOption];
       if (typeof difficulty !== 'string' || !validDifficulty.has(difficulty)) {
         throw new ServiceUnavailableException(
           'Question difficulty must be easy, medium, or hard.',
@@ -339,7 +330,7 @@ export class QuestionGenerationGraphService {
         question,
         options: options as [string, string, string, string],
         answer: answer.trim(),
-        correctOptions,
+        correctOptions: [correctOption],
         difficulty,
       } as GeneratedQuestion;
     });

@@ -1,11 +1,12 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsInt,
   IsNumber,
   IsObject,
   IsPositive,
   IsString,
-  Min,
   ValidateNested,
 } from 'class-validator';
 
@@ -21,23 +22,20 @@ class DifficultyDistributionDto {
 }
 
 export class GenerateQuestionsDto {
-  @IsString()
-  subject_code!: string;
-
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  chapter_no!: number;
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  uploadIds!: string[];
 
   @Type(() => Number)
   @IsInt()
   @IsPositive()
-  num_questions!: number;
+  numQuestions!: number;
 
   @IsObject()
   @ValidateNested()
   @Type(() => DifficultyDistributionDto)
-  difficulty_dist!: DifficultyDistributionDto;
+  difficultyDist!: DifficultyDistributionDto;
 }
 
 export { DifficultyDistributionDto };

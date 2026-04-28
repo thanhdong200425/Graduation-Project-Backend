@@ -66,6 +66,19 @@ export class UploadController {
     return pdfUpload;
   }
 
+  @Get('/')
+  async getMyUploads(@Req() req: AuthRequest) {
+    const uploads = await this.uploadService.findAllByUser(req.user.id);
+    return uploads.map((u) => ({
+      id: u.id,
+      fileName: u.fileName,
+      status: u.status,
+      progress: u.progress,
+      currentStep: u.currentStep,
+      createdAt: u.createdAt,
+    }));
+  }
+
   @Get(':id/status')
   async getStatus(@Param('id') id: string) {
     const upload = await this.uploadService.getStatus(id);

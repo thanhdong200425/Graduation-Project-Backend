@@ -1,22 +1,32 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GenerateQuestionsDto } from './dto/generate-questions.dto';
 import { ExamGenerationService } from './exam-generation.service';
-import { GeneratedQuestion } from './types/question.types';
-import { ChapterRetrievalService } from './services/chapter-retrieval.service';
 
-// @UseGuards(JwtAuthGuard)
-@Controller()
+@Controller('generate-questions')
+@UseGuards(JwtAuthGuard)
 export class ExamGenerationController {
-  constructor(
-    private readonly examGenerationService: ExamGenerationService,
-    private readonly chapterRetrievalService: ChapterRetrievalService,
-  ) {}
+  constructor(private readonly examGenerationService: ExamGenerationService) {}
 
-  @Post('generate-questions')
+  @Post('/')
+  @HttpCode(HttpStatus.CREATED)
   async generateQuestions(
     @Body() body: GenerateQuestionsDto,
-  ): Promise<GeneratedQuestion[]> {
-    return this.examGenerationService.generateQuestions(body);
+  ): Promise<{ jobId: string }> {
+    return this.examGenerationService.createJob(body);
+  }
+
+  @Get('/jobs/:id')
+  async getJobStatus(@Param('id') id: string) {
+    return this.examGenerationService.getJob(id);
   }
 }

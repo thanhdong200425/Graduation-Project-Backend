@@ -81,6 +81,13 @@ export class UploadService {
       );
   }
 
+  async findAllByUser(userId: string): Promise<PdfUpload[]> {
+    return this.prisma.pdfUpload.findMany({
+      where: { uploadedById: userId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async getStatus(uploadId: string): Promise<PdfUpload> {
     return await this.prisma.pdfUpload.findUniqueOrThrow({
       where: { id: uploadId },
