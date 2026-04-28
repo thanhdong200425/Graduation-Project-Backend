@@ -74,7 +74,7 @@ export class QuestionGenerationGraphService {
       );
 
     const graph = new StateGraph(QuestionGenerationState)
-      .addNode('buildQuery', async (state) => {
+      .addNode('buildQuery', async () => {
         const query = 'exam questions from uploaded documents';
         console.log('Query:', query);
         await report(10);
