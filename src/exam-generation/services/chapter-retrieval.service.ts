@@ -18,6 +18,9 @@ export class ChapterRetrievalService {
     const modelType = (configService.get<string>('MODEL_TYPE') ?? 'OLLAMA')
       .trim()
       .toUpperCase();
+    const useEmbeddingFromOllama = configService.getOrThrow<boolean>(
+      'USE_EMBEDDING_FROM_OLLAMA',
+    );
 
     this.collectionName = configService.getOrThrow('QDRANT_COLLECTION');
     this.qdrantClient = new QdrantClient({
@@ -27,14 +30,24 @@ export class ChapterRetrievalService {
 
     if (modelType === 'API') {
       const apiKey = configService.getOrThrow<string>('GEMINI_API_KEY');
-      const model =
-        configService.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ??
-        'text-embedding-004';
+      const model = useEmbeddingFromOllama
+        ? configService.getOrThrow<string>('OLLAMA_EMBEDDING_MODEL')
+        : (configService.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ??
+          'text-embedding-004');
 
-      this.embeddings = new GoogleGenerativeAIEmbeddings({
-        apiKey,
-        modelName: model,
-      });
+      if (useEmbeddingFromOllama) {
+        const ollamaBaseUrl =
+          configService.getOrThrow<string>('OLLAMA_BASE_URL');
+        this.embeddings = new OllamaEmbeddings({
+          model,
+          baseUrl: ollamaBaseUrl,
+        });
+      } else {
+        this.embeddings = new GoogleGenerativeAIEmbeddings({
+          apiKey,
+          modelName: model,
+        });
+      }
     } else {
       const ollamaBaseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
       const embeddingModel = configService.getOrThrow<string>(
