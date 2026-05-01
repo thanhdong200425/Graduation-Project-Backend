@@ -75,7 +75,8 @@ export class QuestionGenerationGraphService {
 
     const graph = new StateGraph(QuestionGenerationState)
       .addNode('buildQuery', async () => {
-        const query = 'exam questions from uploaded documents';
+        const query =
+          'key concepts, definitions, theories, and important facts suitable for academic exam questions';
         await report(10);
         return { query };
       })
@@ -84,6 +85,7 @@ export class QuestionGenerationGraphService {
           await this.chapterRetrievalService.retrieveChunksByUploadIds({
             uploadIds: state.uploadIds,
             topK: 10,
+            query: state.query,
           });
         await report(30);
         return { chunks };

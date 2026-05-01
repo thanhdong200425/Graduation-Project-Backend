@@ -24,8 +24,11 @@ export class QdrantService implements OnModuleInit {
     const modelType = (config.get<string>('MODEL_TYPE') ?? 'OLLAMA')
       .trim()
       .toUpperCase();
+    const useEmbedingFromOllama = config.getOrThrow<boolean>(
+      'USE_EMBEDDING_FROM_OLLAMA',
+    );
 
-    if (modelType === 'API') {
+    if (modelType === 'API' && !useEmbedingFromOllama) {
       this.embeddings = new GoogleGenerativeAIEmbeddings({
         apiKey: config.getOrThrow<string>('GEMINI_API_KEY'),
         modelName:

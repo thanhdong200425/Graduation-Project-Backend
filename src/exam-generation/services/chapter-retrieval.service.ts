@@ -132,9 +132,12 @@ export class ChapterRetrievalService {
   async retrieveChunksByUploadIds(params: {
     uploadIds: string[];
     topK?: number;
+    query?: string;
   }): Promise<RetrievedChunk[]> {
     const topK = params.topK ?? 10;
-    const query = 'exam questions from uploaded documents';
+    const query =
+      params.query ??
+      'key concepts, definitions, and important topics for exam questions';
 
     let embedding: number[];
     try {
