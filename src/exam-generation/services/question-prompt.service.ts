@@ -99,20 +99,17 @@ export class QuestionPromptService {
       .map((chunk, index) => `Chunk ${index + 1}:\n${chunk.content}`)
       .join('\n\n');
 
-    const scope =
-      params.subjectCode && params.chapterNo
-        ? `for subject ${params.subjectCode}, chapter ${params.chapterNo}`
-        : 'based on the provided content';
-
     return [
       'You are an exam question generator.',
-      `Generate exactly ${params.numQuestions} multiple-choice questions ${scope}.`,
+      `Generate exactly ${params.numQuestions} multiple-choice questions based on the provided context.`,
       `Difficulty counts must be exactly: easy=${params.difficultyCounts.easy}, medium=${params.difficultyCounts.medium}, hard=${params.difficultyCounts.hard}.`,
-      'Use only the provided context. Do not invent facts not present in context.',
+      'Use only the concepts and facts from the provided context. Do not invent facts not present in context.',
+      'When the context contains numerical values, you MAY vary those numbers to create distinct questions — always adjust the correct answer to match the changed values.',
       'Each question must have exactly 4 options in an array and exactly 1 correct option.',
+      'Randomize the position of the correct answer across the 4 options — do not always place it at the same position (A, B, C, or D).',
       'Field "answer" must be a short direct answer or key explanation in Vietnamese — not the text of a choice.',
       'Field "correctOptions" must be a JSON array with exactly one string: the correct choice copied verbatim from "options".',
-      'Remember to transform your response into Vietnamese',
+      'All questions, options, and answers must be written in Vietnamese.',
       'Return ONLY valid JSON (no markdown, no backticks) as an array with this schema:',
       '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."],"difficulty":"easy|medium|hard"}]',
       '',

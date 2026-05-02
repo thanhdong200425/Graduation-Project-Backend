@@ -74,18 +74,18 @@ export class QuestionGenerationGraphService {
       );
 
     const graph = new StateGraph(QuestionGenerationState)
-      .addNode('buildQuery', async () => {
-        const query =
-          'key concepts, definitions, theories, and important facts suitable for academic exam questions';
-        await report(10);
-        return { query };
-      })
+      // .addNode('buildQuery', async () => {
+      //   const query =
+      //     'key concepts, definitions, theories, and important facts suitable for academic exam questions';
+      //   await report(10);
+      //   return { query };
+      // })
       .addNode('retrieveContext', async (state) => {
         const chunks =
           await this.chapterRetrievalService.retrieveChunksByUploadIds({
             uploadIds: state.uploadIds,
             topK: 10,
-            query: state.query,
+            // query: state.query,
           });
         await report(30);
         return { chunks };
@@ -191,8 +191,9 @@ export class QuestionGenerationGraphService {
         await report(90);
         return { rawModelOutput: content, questions: parsed };
       })
-      .addEdge('__start__', 'buildQuery')
-      .addEdge('buildQuery', 'retrieveContext')
+      // .addEdge('__start__', 'buildQuery')
+      // .addEdge('buildQuery', 'retrieveContext')
+      .addEdge('__start__', 'retrieveContext')
       .addEdge('retrieveContext', 'gradeChunks')
       .addEdge('gradeChunks', 'buildPrompt')
       .addEdge('buildPrompt', 'generateQuestions')

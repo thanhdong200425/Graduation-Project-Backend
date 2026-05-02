@@ -135,13 +135,11 @@ export class ChapterRetrievalService {
     query?: string;
   }): Promise<RetrievedChunk[]> {
     const topK = params.topK ?? 10;
-    const query =
-      params.query ??
-      'key concepts, definitions, and important topics for exam questions';
+    const query = params.query;
 
     let embedding: number[];
     try {
-      embedding = await this.embeddings.embedQuery(query);
+      embedding = await this.embeddings.embedQuery(query ?? '');
     } catch (e) {
       console.error('Embedding error:', e);
       throw new ServiceUnavailableException(
@@ -154,12 +152,12 @@ export class ChapterRetrievalService {
         vector: embedding,
         limit: topK,
         with_payload: true,
-        filter: {
-          should: params.uploadIds.map((id) => ({
-            key: 'pdfUploadId',
-            match: { value: id },
-          })),
-        },
+        // filter: {
+        //   should: params.uploadIds.map((id) => ({
+        //     key: 'pdfUploadId',
+        //     match: { value: id },
+        //   })),
+        // },
       });
 
       const chunks: RetrievedChunk[] = [];
