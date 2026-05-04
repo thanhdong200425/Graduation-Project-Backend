@@ -1,10 +1,16 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { PdfUpload } from '@prisma/client';
 import { createHash } from 'crypto';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { checkFileIsExists } from '../../helpers/file';
+import { MongodbService } from '../mongodb/mongodb.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { QdrantService } from '../qdrant/qdrant.service';
 import { PdfUploadResponseDto } from './upload.dto';
 import { PdfPipelineService } from './pdf/pdf-pipiline.service';
 
@@ -15,6 +21,8 @@ export class UploadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly pdfPipeline: PdfPipelineService,
+    private readonly mongodb: MongodbService,
+    private readonly qdrant: QdrantService,
   ) {}
 
   async uploadPdf(
@@ -92,5 +100,26 @@ export class UploadService {
     return await this.prisma.pdfUpload.findUniqueOrThrow({
       where: { id: uploadId },
     });
+  }
+
+  async deletePdf(uploadId: string, userId: string): Promise<void> {
+    const record = await this.prisma.pdfUpload.findUniqueOrThrow({
+      where: { id: uploadId },
+    });
+
+    if (record.uploadedById !== userId) {
+      throw new ForbiddenException(
+        'You do not have permission to delete this file',
+      );
+    }
+
+    await this.mongodb.deleteChunksByUploadId(uploadId);
+    await this.qdrant.deleteVectorsByUploadId(uploadId);
+
+    if (existsSync(record.filePath)) {
+      unlinkSync(record.filePath);
+    }
+
+    await this.prisma.pdfUpload.delete({ where: { id: uploadId } });
   }
 }

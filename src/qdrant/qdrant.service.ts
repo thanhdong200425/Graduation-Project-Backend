@@ -110,4 +110,12 @@ export class QdrantService implements OnModuleInit {
       throw error;
     }
   }
+
+  async deleteVectorsByUploadId(pdfUploadId: string): Promise<void> {
+    await this.client.delete(this.collectionName, {
+      filter: {
+        must: [{ key: 'pdfUploadId', match: { value: pdfUploadId } }],
+      },
+    });
+  }
 }

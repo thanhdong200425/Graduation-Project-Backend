@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   FileTypeValidator,
   Get,
   HttpCode,
@@ -88,5 +89,11 @@ export class UploadController {
       currentStep: upload.currentStep,
       progress: upload.progress,
     };
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deletePdf(@Param('id') id: string, @Req() req: AuthRequest) {
+    await this.uploadService.deletePdf(id, req.user.id);
   }
 }

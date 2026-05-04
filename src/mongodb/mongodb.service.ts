@@ -79,4 +79,8 @@ export class MongodbService implements OnModuleInit, OnModuleDestroy {
       return { success: false };
     }
   }
+
+  async deleteChunksByUploadId(pdfUploadId: string): Promise<void> {
+    await this.mongoCollection.deleteMany({ pdfUploadId });
+  }
 }
