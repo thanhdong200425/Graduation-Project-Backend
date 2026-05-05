@@ -85,7 +85,7 @@ model TextbookChunk {
 
 model GeneratedQuestion {
   id            String          @id @default(uuid())
-  chapterId     String
+  chapterId     String?
   chunkId       String?
   question      String
   optionA       String
@@ -99,7 +99,7 @@ model GeneratedQuestion {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   examQuestions ExamQuestion[]
-  chapter       Chapter         @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  chapter       Chapter?        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   chunk         TextbookChunk?  @relation(fields: [chunkId], references: [id])
 
   @@index([chapterId])
@@ -110,8 +110,8 @@ model GeneratedQuestion {
 
 model Exam {
   id               String         @id @default(uuid())
-  subjectId        String
-  chapterId        String
+  subjectId        String?
+  chapterId        String?
   title            String
   totalQuestions   Int
   difficultyEasy   Int
@@ -120,8 +120,8 @@ model Exam {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   examQuestions    ExamQuestion[]
-  chapter          Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
-  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapter          Chapter?       @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  subject          Subject?       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([subjectId])
   @@index([chapterId])

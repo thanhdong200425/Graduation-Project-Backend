@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Exam, Prisma } from '@prisma/client';
 import { QuestionsService } from '../questions/questions.service';
 import { ExamQuestionsService } from '../exam-questions/exam-questions.service';
+import { SaveCompleteExamDto } from './dto/save-complete-exam.dto';
 
 @Injectable()
 export class ExamsService {
@@ -18,7 +19,8 @@ export class ExamsService {
     });
   }
 
-  async createComplete(dto: any): Promise<Exam> {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async createComplete(dto: SaveCompleteExamDto): Promise<Exam> {
     const { questions, subjectId, chapterId, ...examMeta } = dto;
 
     return this.prisma.$transaction(async (tx) => {
@@ -30,8 +32,8 @@ export class ExamsService {
           difficultyEasy: examMeta.difficultyEasy,
           difficultyMedium: examMeta.difficultyMedium,
           difficultyHard: examMeta.difficultyHard,
-          subject: { connect: { id: subjectId } },
-          chapter: { connect: { id: chapterId } },
+          ...(subjectId ? { subject: { connect: { id: subjectId } } } : {}),
+          ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
         },
       });
 
@@ -49,7 +51,7 @@ export class ExamsService {
             optionD: q.optionD,
             correctAnswer: q.correctAnswer,
             difficulty: q.difficulty || 'MEDIUM',
-            chapter: { connect: { id: chapterId } },
+            ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
             status: 'APPROVED',
           },
           tx,
