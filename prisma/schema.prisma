@@ -100,7 +100,7 @@ model Question {
   id            String          @id @default(uuid())
   chapterId     String?
   chunkId       String?
-  question      String
+  name          String
   optionA       String
   optionB       String
   optionC       String
@@ -114,6 +114,7 @@ model Question {
   examItems     ExamItem[]
   chapter       Chapter?        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   chunk         TextbookChunk?  @relation(fields: [chunkId], references: [id])
+  explanation   String?
 
   @@index([chapterId])
   @@index([chunkId])
