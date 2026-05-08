@@ -84,6 +84,19 @@ model TextbookChunk {
 }
 
 model GeneratedQuestion {
+  /// Question bank item (usually AI-generated, then reviewed).
+  ///
+  /// Purpose:
+  /// - Stores the canonical MCQ content (stem + 4 options + correct answer).
+  /// - Tracks moderation/review state via `status` (DRAFT/APPROVED/REJECTED).
+  /// - Can be reused across many exams via `ExamQuestion` (many-to-many).
+  ///
+  /// Provenance:
+  /// - `chapterId`/`chunkId` are optional to allow manual/imported questions
+  ///   or questions not tied to a specific chunk.
+  ///
+  /// Example (conceptual):
+  /// - A generated question starts as `DRAFT`, then an admin approves it.
   id            String          @id @default(uuid())
   chapterId     String?
   chunkId       String?
@@ -109,6 +122,16 @@ model GeneratedQuestion {
 }
 
 model Exam {
+  /// Exam container / blueprint saved by users.
+  ///
+  /// Purpose:
+  /// - Represents an exam a user created/saved (title + scope).
+  /// - Stores the intended composition (`totalQuestions` + difficulty mix).
+  /// - The actual selected questions live in `ExamQuestion`.
+  ///
+  /// Example (conceptual):
+  /// - title="Chapter 1 - Practice", totalQuestions=20,
+  ///   difficultyEasy=5, difficultyMedium=10, difficultyHard=5.
   id               String         @id @default(uuid())
   subjectId        String?
   chapterId        String?
@@ -129,6 +152,16 @@ model Exam {
 }
 
 model ExamQuestion {
+  /// Join table linking `Exam` <-> `GeneratedQuestion` with ordering.
+  ///
+  /// Purpose:
+  /// - Each row means: "this exam includes this question".
+  /// - `orderIndex` keeps a stable question order (Q1, Q2, ...).
+  /// - `@@unique([examId, questionId])` prevents duplicates in the same exam.
+  ///
+  /// Example (conceptual):
+  /// - examId=E1, questionId=Q1, orderIndex=1
+  /// - examId=E1, questionId=Q2, orderIndex=2
   id         String            @id @default(uuid())
   examId     String
   questionId String
