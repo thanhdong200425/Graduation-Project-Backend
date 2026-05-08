@@ -81,10 +81,13 @@ export class ExamsService {
     }) as unknown as Exam;
   }
 
-  async findAll(): Promise<Exam[]> {
+  async findAll() {
     return this.prisma.exam.findMany({
       orderBy: {
         createdAt: 'desc',
+      },
+      include: {
+        subject: true,
       },
     });
   }
