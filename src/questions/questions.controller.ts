@@ -26,6 +26,7 @@ export class QuestionsController {
     const { chapterId, chunkId, ...rest } = createQuestionDto;
     return this.questionsService.create({
       ...rest,
+      name: rest.question,
       chapter: { connect: { id: chapterId } },
       ...(chunkId ? { chunk: { connect: { id: chunkId } } } : {}),
     });
@@ -49,7 +50,12 @@ export class QuestionsController {
     @Param('id') id: string,
     @Body() updateQuestionDto: UpdateQuestionDto,
   ) {
-    return this.questionsService.update(id, updateQuestionDto);
+    const { chapterId, chunkId, ...rest } = updateQuestionDto;
+    return this.questionsService.update(id, {
+      ...rest,
+      ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
+      ...(chunkId ? { chunk: { connect: { id: chunkId } } } : {}),
+    });
   }
 
   @Delete(':id')

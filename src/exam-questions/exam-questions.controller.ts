@@ -10,12 +10,12 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateExamQuestionDto } from './dto/create-exam-question.dto';
-import { ExamQuestionsService } from './exam-questions.service';
+import { ExamItemsService } from './exam-questions.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('exam-questions')
 export class ExamQuestionsController {
-  constructor(private readonly examQuestionsService: ExamQuestionsService) {}
+  constructor(private readonly examQuestionsService: ExamItemsService) {}
 
   @Post()
   async create(@Body() createExamQuestionDto: CreateExamQuestionDto) {
