@@ -11,6 +11,9 @@ import { ExamsModule } from './exams/exams.module';
 import { ExamQuestionsModule } from './exam-questions/exam-questions.module';
 import { SubjectsModule } from './subjects/subjects.module';
 import { ChaptersModule } from './chapters/chapters.module';
+import { UploadModule } from './upload/upload.module';
+import { MongodbModule } from './mongodb/mongodb.module';
+import { QdrantModule } from './qdrant/qdrant.module';
 
 @Module({
   imports: [
@@ -24,6 +27,9 @@ import { ChaptersModule } from './chapters/chapters.module';
     SubjectsModule,
     ChaptersModule,
     ConfigModule.forRoot(),
+    UploadModule,
+    MongodbModule,
+    QdrantModule,
   ],
   controllers: [AppController],
   providers: [AppService],

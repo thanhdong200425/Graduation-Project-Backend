@@ -27,8 +27,12 @@ export interface GeneratedQuestion {
 }
 
 export interface GenerateQuestionsInput {
-  subjectCode: string;
-  chapterNo: number;
+  uploadIds: string[];
   numQuestions: number;
   difficultyDist: DifficultyDistribution;
+}
+
+export interface ChunkScore {
+  chunkContent: string;
+  score: number;
 }

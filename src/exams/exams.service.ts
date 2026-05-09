@@ -2,14 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Exam, Prisma } from '@prisma/client';
 import { QuestionsService } from '../questions/questions.service';
-import { ExamQuestionsService } from '../exam-questions/exam-questions.service';
+import { ExamItemsService } from '../exam-questions/exam-questions.service';
+import { SaveCompleteExamDto } from './dto/save-complete-exam.dto';
 
 @Injectable()
 export class ExamsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly questionsService: QuestionsService,
-    private readonly examQuestionsService: ExamQuestionsService,
+    private readonly examItemsService: ExamItemsService,
   ) {}
 
   async create(data: Prisma.ExamCreateInput): Promise<Exam> {
@@ -18,7 +19,8 @@ export class ExamsService {
     });
   }
 
-  async createComplete(dto: any): Promise<Exam> {
+  // eslint-disable-next-line @typescript-eslint/require-await
+  async createComplete(dto: SaveCompleteExamDto): Promise<Exam> {
     const { questions, subjectId, chapterId, ...examMeta } = dto;
 
     return this.prisma.$transaction(async (tx) => {
@@ -30,40 +32,46 @@ export class ExamsService {
           difficultyEasy: examMeta.difficultyEasy,
           difficultyMedium: examMeta.difficultyMedium,
           difficultyHard: examMeta.difficultyHard,
-          subject: { connect: { id: subjectId } },
-          chapter: { connect: { id: chapterId } },
+          ...(subjectId ? { subject: { connect: { id: subjectId } } } : {}),
+          ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
         },
       });
 
       // 2. Process each question
       for (let i = 0; i < questions.length; i++) {
         const q = questions[i];
-        
-        // 2a. Create GeneratedQuestion using QuestionsService
-        const question = await this.questionsService.create({
-          question: q.question,
-          optionA: q.optionA,
-          optionB: q.optionB,
-          optionC: q.optionC,
-          optionD: q.optionD,
-          correctAnswer: q.correctAnswer,
-          difficulty: q.difficulty || 'MEDIUM',
-          chapter: { connect: { id: chapterId } },
-          status: 'APPROVED',
-        }, tx);
 
-        // 2b. Link Question to Exam via ExamQuestionsService
-        await this.examQuestionsService.create({
-          exam: { connect: { id: exam.id } },
-          question: { connect: { id: question.id } },
-          orderIndex: i + 1,
-        }, tx);
+        // 2a. Create GeneratedQuestion using QuestionsService
+        const question = await this.questionsService.create(
+          {
+            name: q.question,
+            optionA: q.optionA,
+            optionB: q.optionB,
+            optionC: q.optionC,
+            optionD: q.optionD,
+            correctAnswer: q.correctAnswer,
+            difficulty: q.difficulty || 'MEDIUM',
+            ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
+            status: 'APPROVED',
+          },
+          tx,
+        );
+
+        // 2b. Link Question to Exam via ExamItemsService
+        await this.examItemsService.create(
+          {
+            exam: { connect: { id: exam.id } },
+            question: { connect: { id: question.id } },
+            orderIndex: i + 1,
+          },
+          tx,
+        );
       }
 
       return tx.exam.findUnique({
         where: { id: exam.id },
         include: {
-          examQuestions: {
+          examItems: {
             include: {
               question: true,
             },
@@ -73,10 +81,13 @@ export class ExamsService {
     }) as unknown as Exam;
   }
 
-  async findAll(): Promise<Exam[]> {
+  async findAll() {
     return this.prisma.exam.findMany({
       orderBy: {
         createdAt: 'desc',
+      },
+      include: {
+        subject: true,
       },
     });
   }
@@ -85,7 +96,7 @@ export class ExamsService {
     return this.prisma.exam.findUnique({
       where: { id },
       include: {
-        examQuestions: {
+        examItems: {
           include: {
             question: true,
           },

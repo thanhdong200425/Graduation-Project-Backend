@@ -1,12 +1,19 @@
-import { IsInt, IsNotEmpty, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
 
 export class CreateExamDto {
   @IsUUID()
-  @IsNotEmpty()
+  @IsOptional()
   subjectId: string;
 
   @IsUUID()
-  @IsNotEmpty()
+  @IsOptional()
   chapterId: string;
 
   @IsString()

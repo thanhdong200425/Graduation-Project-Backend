@@ -6,9 +6,10 @@ import { QuestionGenerationGraphService } from './services/question-generation-g
 import { QuestionPromptService } from './services/question-prompt.service';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionValidationService } from './services/question-validation.service';
+import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, PrismaModule],
   controllers: [ExamGenerationController],
   providers: [
     ExamGenerationService,

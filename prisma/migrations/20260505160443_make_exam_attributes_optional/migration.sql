@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "exams" ALTER COLUMN "subjectId" DROP NOT NULL,
+ALTER COLUMN "chapterId" DROP NOT NULL;

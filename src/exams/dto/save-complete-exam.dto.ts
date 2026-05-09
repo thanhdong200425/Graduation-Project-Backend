@@ -57,11 +57,11 @@ class QuestionInputDto {
 
 export class SaveCompleteExamDto {
   @IsUUID()
-  @IsNotEmpty()
+  @IsOptional()
   subjectId: string;
 
   @IsUUID()
-  @IsNotEmpty()
+  @IsOptional()
   chapterId: string;
 
   @IsString()

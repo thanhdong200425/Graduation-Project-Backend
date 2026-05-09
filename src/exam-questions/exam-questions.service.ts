@@ -1,23 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { ExamQuestion, Prisma } from '@prisma/client';
+import { ExamItem, Prisma } from '@prisma/client';
 
 @Injectable()
-export class ExamQuestionsService {
+export class ExamItemsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(
-    data: Prisma.ExamQuestionCreateInput,
+    data: Prisma.ExamItemCreateInput,
     tx?: Prisma.TransactionClient,
-  ): Promise<ExamQuestion> {
+  ): Promise<ExamItem> {
     const prisma = tx || this.prisma;
-    return prisma.examQuestion.create({
+    return prisma.examItem.create({
       data,
     });
   }
 
-  async findByExam(examId: string): Promise<ExamQuestion[]> {
-    return this.prisma.examQuestion.findMany({
+  async findByExam(examId: string): Promise<ExamItem[]> {
+    return this.prisma.examItem.findMany({
       where: { examId },
       include: {
         question: true,
@@ -29,7 +29,7 @@ export class ExamQuestionsService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.prisma.examQuestion.delete({
+    await this.prisma.examItem.delete({
       where: { id },
     });
   }
@@ -38,7 +38,7 @@ export class ExamQuestionsService {
    * Remove all questions from an exam.
    */
   async removeByExam(examId: string): Promise<void> {
-    await this.prisma.examQuestion.deleteMany({
+    await this.prisma.examItem.deleteMany({
       where: { examId },
     });
   }

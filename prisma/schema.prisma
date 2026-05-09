@@ -7,12 +7,33 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String      @id @default(uuid())
+  email        String      @unique
   passwordHash String
   name         String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  pdfUploads   PdfUpload[]
+}
+
+model PdfUpload {
+  id           String          @id @default(uuid())
+  uploadedById String
+  chapterId    String?
+  fileName     String
+  fileHash     String          @unique
+  filePath     String
+  status       PdfUploadStatus @default(PENDING)
+  progress     Int             @default(0)
+  currentStep  CurrentStep     @default(PARSING)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  uploadedBy   User            @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+  chapter      Chapter?        @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@index([uploadedById])
+  @@index([chapterId])
+  @@map("pdf_uploads")
 }
 
 model Subject {
@@ -29,43 +50,57 @@ model Subject {
 }
 
 model Chapter {
-  id                 String              @id @default(uuid())
-  subjectId          String
-  name               String
-  description        String?
-  orderIndex         Int?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  subject            Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  exams              Exam[]
-  generatedQuestions GeneratedQuestion[]
-  textbookChunks     TextbookChunk[]
+  id             String          @id @default(uuid())
+  subjectId      String
+  name           String
+  description    String?
+  orderIndex     Int?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  subject        Subject         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  exams          Exam[]
+  questions      Question[]
+  textbookChunks TextbookChunk[]
+  pdfUploads     PdfUpload[]
 
   @@index([subjectId])
   @@map("chapters")
 }
 
 model TextbookChunk {
-  id                 String              @id @default(uuid())
-  chapterId          String
-  lesson             String?
-  topic              String?
-  content            String
-  keywords           String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  generatedQuestions GeneratedQuestion[]
-  chapter            Chapter             @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  id        String     @id @default(uuid())
+  chapterId String
+  lesson    String?
+  topic     String?
+  content   String
+  keywords  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  questions Question[]
+  chapter   Chapter    @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   @@index([chapterId])
   @@map("textbook_chunks")
 }
 
-model GeneratedQuestion {
+model Question {
+  /// Question bank item (usually AI-generated, then reviewed).
+  ///
+  /// Purpose:
+  /// - Stores the canonical MCQ content (stem + 4 options + correct answer).
+  /// - Tracks moderation/review state via `status` (DRAFT/APPROVED/REJECTED).
+  /// - Can be reused across many exams via `ExamQuestion` (many-to-many).
+  ///
+  /// Provenance:
+  /// - `chapterId`/`chunkId` are optional to allow manual/imported questions
+  ///   or questions not tied to a specific chunk.
+  ///
+  /// Example (conceptual):
+  /// - A generated question starts as `DRAFT`, then an admin approves it.
   id            String          @id @default(uuid())
-  chapterId     String
+  chapterId     String?
   chunkId       String?
-  question      String
+  name          String
   optionA       String
   optionB       String
   optionC       String
@@ -76,49 +111,70 @@ model GeneratedQuestion {
   status        QuestionStatus  @default(DRAFT)
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
-  examQuestions ExamQuestion[]
-  chapter       Chapter         @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  examItems     ExamItem[]
+  chapter       Chapter?        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   chunk         TextbookChunk?  @relation(fields: [chunkId], references: [id])
+  explanation   String?
 
   @@index([chapterId])
   @@index([chunkId])
   @@index([status])
-  @@map("generated_questions")
+  @@map("questions")
 }
 
 model Exam {
-  id               String         @id @default(uuid())
-  subjectId        String
-  chapterId        String
+  /// Exam container / blueprint saved by users.
+  ///
+  /// Purpose:
+  /// - Represents an exam a user created/saved (title + scope).
+  /// - Stores the intended composition (`totalQuestions` + difficulty mix).
+  /// - The actual selected questions live in `ExamQuestion`.
+  ///
+  /// Example (conceptual):
+  /// - title="Chapter 1 - Practice", totalQuestions=20,
+  ///   difficultyEasy=5, difficultyMedium=10, difficultyHard=5.
+  id               String     @id @default(uuid())
+  subjectId        String?
+  chapterId        String?
   title            String
   totalQuestions   Int
   difficultyEasy   Int
   difficultyMedium Int
   difficultyHard   Int
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  examQuestions    ExamQuestion[]
-  chapter          Chapter        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
-  subject          Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  examItems        ExamItem[]
+  chapter          Chapter?   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  subject          Subject?   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@index([subjectId])
   @@index([chapterId])
   @@map("exams")
 }
 
-model ExamQuestion {
-  id         String            @id @default(uuid())
+model ExamItem {
+  /// Join table linking `Exam` <-> `Question` with ordering.
+  ///
+  /// Purpose:
+  /// - Each row means: "this exam includes this question".
+  /// - `orderIndex` keeps a stable question order (Q1, Q2, ...).
+  /// - `@@unique([examId, questionId])` prevents duplicates in the same exam.
+  ///
+  /// Example (conceptual):
+  /// - examId=E1, questionId=Q1, orderIndex=1
+  /// - examId=E1, questionId=Q2, orderIndex=2
+  id         String   @id @default(uuid())
   examId     String
   questionId String
   orderIndex Int
-  createdAt  DateTime          @default(now())
-  exam       Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
-  question   GeneratedQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([examId, questionId])
   @@index([examId])
   @@index([questionId])
-  @@map("exam_questions")
+  @@map("exam_items")
 }
 
 enum DifficultyLevel {
@@ -131,4 +187,37 @@ enum QuestionStatus {
   DRAFT
   APPROVED
   REJECTED
+}
+
+enum PdfUploadStatus {
+  PENDING
+  INDEXED
+  FAILED
+}
+
+enum CurrentStep {
+  PARSING
+  CHUNKING
+  EMBEDDING
+  STORING
+  DONE
+}
+
+model GenerationJob {
+  id        String           @id @default(uuid())
+  status    GenerationStatus @default(PENDING)
+  progress  Int              @default(0)
+  result    Json?
+  error     String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@map("generation_jobs")
+}
+
+enum GenerationStatus {
+  PENDING
+  RUNNING
+  DONE
+  FAILED
 }

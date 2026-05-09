@@ -18,6 +18,9 @@ export class ChapterRetrievalService {
     const modelType = (configService.get<string>('MODEL_TYPE') ?? 'OLLAMA')
       .trim()
       .toUpperCase();
+    const useEmbeddingFromOllama = configService.getOrThrow<boolean>(
+      'USE_EMBEDDING_FROM_OLLAMA',
+    );
 
     this.collectionName = configService.getOrThrow('QDRANT_COLLECTION');
     this.qdrantClient = new QdrantClient({
@@ -27,14 +30,24 @@ export class ChapterRetrievalService {
 
     if (modelType === 'API') {
       const apiKey = configService.getOrThrow<string>('GEMINI_API_KEY');
-      const model =
-        configService.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ??
-        'text-embedding-004';
+      const model = useEmbeddingFromOllama
+        ? configService.getOrThrow<string>('OLLAMA_EMBEDDING_MODEL')
+        : (configService.get<string>('GEMINI_EMBEDDING_MODEL')?.trim() ??
+          'text-embedding-004');
 
-      this.embeddings = new GoogleGenerativeAIEmbeddings({
-        apiKey,
-        modelName: model,
-      });
+      if (useEmbeddingFromOllama) {
+        const ollamaBaseUrl =
+          configService.getOrThrow<string>('OLLAMA_BASE_URL');
+        this.embeddings = new OllamaEmbeddings({
+          model,
+          baseUrl: ollamaBaseUrl,
+        });
+      } else {
+        this.embeddings = new GoogleGenerativeAIEmbeddings({
+          apiKey,
+          modelName: model,
+        });
+      }
     } else {
       const ollamaBaseUrl = configService.getOrThrow<string>('OLLAMA_BASE_URL');
       const embeddingModel = configService.getOrThrow<string>(
@@ -112,6 +125,60 @@ export class ChapterRetrievalService {
     } catch {
       throw new ServiceUnavailableException(
         'Failed to search chapter content from Qdrant.',
+      );
+    }
+  }
+
+  async retrieveChunksByUploadIds(params: {
+    uploadIds: string[];
+    topK?: number;
+    query?: string;
+  }): Promise<RetrievedChunk[]> {
+    const topK = params.topK ?? 10;
+    const query = params.query;
+
+    let embedding: number[];
+    try {
+      embedding = await this.embeddings.embedQuery(query ?? '');
+    } catch (e) {
+      console.error('Embedding error:', e);
+      throw new ServiceUnavailableException(
+        'Failed to create embedding for upload query.',
+      );
+    }
+
+    try {
+      const points = await this.qdrantClient.search(this.collectionName, {
+        vector: embedding,
+        limit: topK,
+        with_payload: true,
+        // filter: {
+        //   should: params.uploadIds.map((id) => ({
+        //     key: 'pdfUploadId',
+        //     match: { value: id },
+        //   })),
+        // },
+      });
+
+      const chunks: RetrievedChunk[] = [];
+      for (const point of points) {
+        const payload = point.payload as Record<string, unknown> | null;
+        if (!payload) continue;
+        const content = payload.content;
+        if (typeof content !== 'string' || !content.trim()) continue;
+        chunks.push({
+          content,
+          subject:
+            typeof payload.subject === 'string' ? payload.subject : undefined,
+          chapter:
+            typeof payload.chapter === 'number' ? payload.chapter : undefined,
+        });
+      }
+
+      return chunks;
+    } catch {
+      throw new ServiceUnavailableException(
+        'Failed to search upload content from Qdrant.',
       );
     }
   }

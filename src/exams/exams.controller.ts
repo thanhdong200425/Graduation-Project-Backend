@@ -24,8 +24,8 @@ export class ExamsController {
     const { subjectId, chapterId, ...rest } = createExamDto;
     return this.examsService.create({
       ...rest,
-      subject: { connect: { id: subjectId } },
-      chapter: { connect: { id: chapterId } },
+      ...(subjectId ? { subject: { connect: { id: subjectId } } } : {}),
+      ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
     });
   }
 
