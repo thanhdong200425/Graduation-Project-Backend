@@ -18,9 +18,8 @@ export class ChapterRetrievalService {
     const modelType = (configService.get<string>('MODEL_TYPE') ?? 'OLLAMA')
       .trim()
       .toUpperCase();
-    const useEmbeddingFromOllama = configService.getOrThrow<boolean>(
-      'USE_EMBEDDING_FROM_OLLAMA',
-    );
+    const useEmbeddingFromOllama =
+      configService.getOrThrow<string>('USE_EMBEDDING_FROM_OLLAMA').trim().toLowerCase() === 'true';
 
     this.collectionName = configService.getOrThrow('QDRANT_COLLECTION');
     this.qdrantClient = new QdrantClient({
@@ -70,7 +69,7 @@ export class ChapterRetrievalService {
 
     let embedding: number[];
     try {
-      embedding = await this.embeddings.embedQuery(query);
+      embedding = await this.embeddings.embedQuery(query ?? 'general');
     } catch (e) {
       console.error('Embedding error:', e);
       throw new ServiceUnavailableException(
@@ -135,11 +134,12 @@ export class ChapterRetrievalService {
     query?: string;
   }): Promise<RetrievedChunk[]> {
     const topK = params.topK ?? 10;
+
     const query = params.query;
 
     let embedding: number[];
     try {
-      embedding = await this.embeddings.embedQuery(query ?? '');
+      embedding = await this.embeddings.embedQuery(query ?? 'bài tập');
     } catch (e) {
       console.error('Embedding error:', e);
       throw new ServiceUnavailableException(
@@ -152,12 +152,12 @@ export class ChapterRetrievalService {
         vector: embedding,
         limit: topK,
         with_payload: true,
-        // filter: {
-        //   should: params.uploadIds.map((id) => ({
-        //     key: 'pdfUploadId',
-        //     match: { value: id },
-        //   })),
-        // },
+        filter: {
+          should: params.uploadIds.map((id) => ({
+            key: 'pdfUploadId',
+            match: { value: id },
+          })),
+        },
       });
 
       const chunks: RetrievedChunk[] = [];
@@ -176,7 +176,8 @@ export class ChapterRetrievalService {
       }
 
       return chunks;
-    } catch {
+    } catch (error) {
+      console.error('Retrieval error:', error);
       throw new ServiceUnavailableException(
         'Failed to search upload content from Qdrant.',
       );
