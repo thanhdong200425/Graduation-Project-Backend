@@ -19,7 +19,7 @@ export class PdfPipelineService {
     private readonly prisma: PrismaService,
     private readonly mongodb: MongodbService,
     private readonly qdrant: QdrantService,
-  ) {}
+  ) { }
 
   async parsePdf(
     pdfUploadId: string,
@@ -31,9 +31,9 @@ export class PdfPipelineService {
 
     const chapter = chapterId
       ? await this.prisma.chapter.findUniqueOrThrow({
-          where: { id: chapterId },
-          include: { subject: true },
-        })
+        where: { id: chapterId },
+        include: { subject: true },
+      })
       : null;
 
     try {
