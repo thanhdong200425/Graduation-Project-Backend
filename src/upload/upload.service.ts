@@ -12,7 +12,7 @@ import { MongodbService } from '../mongodb/mongodb.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QdrantService } from '../qdrant/qdrant.service';
 import { PdfUploadResponseDto } from './upload.dto';
-import { PdfPipelineService } from './pdf/pdf-pipiline.service';
+import { PdfPipelineService, ParsedPdfResult } from './pdf/pdf-pipiline.service';
 
 const UPLOAD_DIR = join(process.cwd(), 'public', 'userUploads');
 
@@ -25,6 +25,9 @@ export class UploadService {
     private readonly qdrant: QdrantService,
   ) {}
 
+  /**
+   * Lưu file lên disk + DB, trích xuất text, trả về cho frontend để user chỉnh sửa.
+   */
   async uploadPdf(
     file: Express.Multer.File,
     uploadedById: string,
@@ -65,28 +68,33 @@ export class UploadService {
       });
     }
 
+    // Lấy ảnh preview ngay lập tức (đồng bộ) để trả về cho frontend
+    const extracted = await this.pdfPipeline.extractText(
+      record.id,
+    );
+
     return {
       id: record.id,
       status: record.status,
       fileName: record.fileName,
       createdAt: record.createdAt,
+      extractedText: extracted.text,
+      numPages: extracted.numPages,
+      previews: extracted.previews,
     };
   }
 
-  async handlePdfProcessing(uploadId: string): Promise<void> {
-    const record = await this.prisma.pdfUpload.findUnique({
-      where: { id: uploadId },
+  /**
+   * Nhận danh sách trang đã chọn từ frontend → chạy trích xuất + Chunking + Embedding (bất đồng bộ).
+   */
+  async processSelectedPages(
+    uploadId: string,
+    selectedPages?: number[],
+  ): Promise<void> {
+    // Chạy ngầm — không await để trả về 202 ngay lập tức
+    this.pdfPipeline.processSelectedPages(uploadId, selectedPages).catch((error) => {
+      console.error(`Error processing selected pages for ${uploadId}:`, error);
     });
-
-    if (!record) {
-      throw new Error('PDF upload not found');
-    }
-
-    await this.pdfPipeline
-      .parsePdf(record.id, record.chapterId)
-      .catch((error) =>
-        console.error(`Error processing PDF ${record.fileName}:`, error),
-      );
   }
 
   async findAllByUser(userId: string): Promise<PdfUpload[]> {
@@ -100,6 +108,10 @@ export class UploadService {
     return await this.prisma.pdfUpload.findUniqueOrThrow({
       where: { id: uploadId },
     });
+  }
+
+  async getExtractedText(uploadId: string): Promise<ParsedPdfResult> {
+    return await this.pdfPipeline.extractText(uploadId);
   }
 
   async deletePdf(uploadId: string, userId: string): Promise<void> {
