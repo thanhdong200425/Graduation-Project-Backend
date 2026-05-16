@@ -12,6 +12,7 @@ import {
   ChunkScore,
   DifficultyCounts,
   DifficultyDistribution,
+  DifficultyLevel,
   GeneratedQuestion,
   RetrievedChunk,
 } from '../types/question.types';
@@ -188,15 +189,58 @@ export class QuestionGenerationGraphService {
           );
         }
 
-        await report(90);
+        await report(85);
         return { rawModelOutput: content, questions: parsed };
+      })
+      .addNode('classifyDifficulty', async (state) => {
+        const payload = {
+          questions: state.questions.map((q, i) => ({
+            id: String(i),
+            content: q.question,
+          })),
+        };
+
+        const response = await fetch(
+          `${this.rerankServiceBaseUrl}/predict/difficulty`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          },
+        );
+
+        if (!response.ok) {
+          throw new ServiceUnavailableException(
+            `Failed to classify question difficulty from ${this.rerankServiceBaseUrl}/predict/difficulty.`,
+          );
+        }
+
+        const data = this.extractDifficultyResults(
+          (await response.json()) as unknown,
+        );
+        console.log({ data });
+        if (!data) {
+          throw new ServiceUnavailableException(
+            'The difficulty classifier returned an invalid response.',
+          );
+        }
+
+        const questions = state.questions.map((q, i) => ({
+          ...q,
+          difficulty: (data.find((r) => r.id === String(i))?.difficulty ??
+            'medium') as DifficultyLevel,
+        }));
+
+        await report(95);
+        return { questions };
       })
       .addEdge('__start__', 'buildQuery')
       .addEdge('buildQuery', 'retrieveContext')
       .addEdge('retrieveContext', 'gradeChunks')
       .addEdge('gradeChunks', 'buildPrompt')
       .addEdge('buildPrompt', 'generateQuestions')
-      .addEdge('generateQuestions', '__end__')
+      .addEdge('generateQuestions', 'classifyDifficulty')
+      .addEdge('classifyDifficulty', '__end__')
       .compile();
 
     const result = await graph.invoke({
@@ -213,6 +257,30 @@ export class QuestionGenerationGraphService {
     });
 
     return result.questions;
+  }
+
+  private extractDifficultyResults(
+    payload: unknown,
+  ): Array<{ id: string; difficulty: string }> | null {
+    if (
+      typeof payload !== 'object' ||
+      payload === null ||
+      !('results' in payload) ||
+      !Array.isArray((payload as { results?: unknown }).results)
+    ) {
+      return null;
+    }
+
+    const results = (
+      payload as {
+        results: Array<{ id?: unknown; difficulty?: unknown }>;
+      }
+    ).results;
+
+    return results.filter(
+      (item): item is { id: string; difficulty: string } =>
+        typeof item.id === 'string' && typeof item.difficulty === 'string',
+    );
   }
 
   private extractRerankResults(
@@ -264,7 +332,6 @@ export class QuestionGenerationGraphService {
       );
     }
 
-    const validDifficulty = new Set(['easy', 'medium', 'hard']);
     const validated = parsed.map((item) => {
       if (typeof item !== 'object' || item === null) {
         throw new ServiceUnavailableException(
@@ -278,7 +345,6 @@ export class QuestionGenerationGraphService {
         options,
         answer,
         correctOptions: correctOptionsRaw,
-        difficulty,
       } = record;
 
       if (typeof question !== 'string' || !question.trim()) {
@@ -321,18 +387,13 @@ export class QuestionGenerationGraphService {
           'Each correctOptions entry must match one option verbatim.',
         );
       }
-      if (typeof difficulty !== 'string' || !validDifficulty.has(difficulty)) {
-        throw new ServiceUnavailableException(
-          'Question difficulty must be easy, medium, or hard.',
-        );
-      }
 
       return {
         question,
         options: options as [string, string, string, string],
         answer: answer.trim(),
         correctOptions: [correctOption],
-        difficulty,
+        difficulty: 'easy' as DifficultyLevel,
       } as GeneratedQuestion;
     });
 

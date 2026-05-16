@@ -102,7 +102,6 @@ export class QuestionPromptService {
     return [
       'You are an exam question generator.',
       `Generate exactly ${params.numQuestions} multiple-choice questions based on the provided context.`,
-      `Difficulty counts must be exactly: easy=${params.difficultyCounts.easy}, medium=${params.difficultyCounts.medium}, hard=${params.difficultyCounts.hard}.`,
       'Use only the concepts and facts from the provided context. Do not invent facts not present in context.',
       'When the context contains numerical values, you MAY vary those numbers to create distinct questions — always adjust the correct answer to match the changed values.',
       'Each question must have exactly 4 options in an array and exactly 1 correct option.',
@@ -111,7 +110,7 @@ export class QuestionPromptService {
       'Field "correctOptions" must be a JSON array with exactly one string: the correct choice copied verbatim from "options".',
       'All questions, options, and answers must be written in Vietnamese.',
       'Return ONLY valid JSON (no markdown, no backticks) as an array with this schema:',
-      '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."],"difficulty":"easy|medium|hard"}]',
+      '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."]}]',
       '',
       'Context:',
       context,
