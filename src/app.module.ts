@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+// Force reload after adding ExamSessionsModule
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
@@ -14,6 +15,7 @@ import { ChaptersModule } from './chapters/chapters.module';
 import { UploadModule } from './upload/upload.module';
 import { MongodbModule } from './mongodb/mongodb.module';
 import { QdrantModule } from './qdrant/qdrant.module';
+import { ExamSessionsModule } from './exam-sessions/exam-sessions.module';
 
 @Module({
   imports: [
@@ -30,6 +32,7 @@ import { QdrantModule } from './qdrant/qdrant.module';
     UploadModule,
     MongodbModule,
     QdrantModule,
+    ExamSessionsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -11,7 +11,7 @@ export class ExamsService {
     private readonly prisma: PrismaService,
     private readonly questionsService: QuestionsService,
     private readonly examItemsService: ExamItemsService,
-  ) {}
+  ) { }
 
   async create(data: Prisma.ExamCreateInput): Promise<Exam> {
     return this.prisma.exam.create({
