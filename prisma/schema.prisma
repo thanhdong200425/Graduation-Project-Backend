@@ -14,6 +14,9 @@ model User {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   pdfUploads   PdfUpload[]
+  
+  teacherSessions    ExamSession[] @relation("TeacherSessions")
+  studentSubmissions Submission[]  @relation("StudentSubmissions")
 }
 
 model PdfUpload {
@@ -115,6 +118,7 @@ model Question {
   chapter       Chapter?        @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   chunk         TextbookChunk?  @relation(fields: [chunkId], references: [id])
   explanation   String?
+  answerDetails AnswerDetail[]
 
   @@index([chapterId])
   @@index([chunkId])
@@ -146,6 +150,7 @@ model Exam {
   examItems        ExamItem[]
   chapter          Chapter?   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
   subject          Subject?   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  sessions         ExamSession[]
 
   @@index([subjectId])
   @@index([chapterId])
@@ -220,4 +225,66 @@ enum GenerationStatus {
   RUNNING
   DONE
   FAILED
+}
+
+// Represents a published, live instance of a generated exam
+model ExamSession {
+  id            String            @id @default(uuid())
+  examId        String            // FK to the existing Exam model in TestMaker
+  teacherId     String            // FK to User (teacher role)
+  inviteCode    String            @unique  // e.g. "EXAM-4821"
+  publicLink    String            @unique  // e.g. "/join/abc123xyz"
+  timeLimitMins Int?              // null = untimed
+  showAnswers   Boolean           @default(false) // teacher toggles this
+  status        ExamSessionStatus @default(DRAFT)
+  startsAt      DateTime?         // optional scheduled start
+  endsAt        DateTime?         // optional scheduled end
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  teacher     User         @relation("TeacherSessions", fields: [teacherId], references: [id])
+  exam        Exam         @relation(fields: [examId], references: [id])
+  submissions Submission[]
+
+  @@map("exam_sessions")
+}
+
+enum ExamSessionStatus {
+  DRAFT    // created but not yet open
+  ACTIVE   // students can join and submit
+  CLOSED   // teacher manually closed; no new submissions
+}
+
+// One submission = one student's completed attempt at a session
+model Submission {
+  id             String    @id @default(uuid())
+  sessionId      String
+  studentId      String    // FK to User (student role)
+  startedAt      DateTime  @default(now())
+  submittedAt    DateTime?
+  isAutoSubmit   Boolean   @default(false) // true if timer ran out
+  score          Float?    // percentage 0–100, calculated on submit
+  totalCorrect   Int?
+  totalQuestions Int
+
+  session       ExamSession    @relation(fields: [sessionId], references: [id])
+  student       User           @relation("StudentSubmissions", fields: [studentId], references: [id])
+  answerDetails AnswerDetail[]
+
+  @@unique([sessionId, studentId]) // one attempt per student per session
+  @@map("submissions")
+}
+
+// Stores the student's answer to each individual question
+model AnswerDetail {
+  id             String  @id @default(uuid())
+  submissionId   String
+  questionId     String  // FK to Question model
+  selectedOption Int     // 0-indexed: which option the student picked
+  isCorrect      Boolean
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+  question   Question   @relation(fields: [questionId], references: [id])
+
+  @@map("answer_details")
 }
