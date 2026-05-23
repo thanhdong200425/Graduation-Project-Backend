@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { CurrentStep } from '@prisma/client';
 import { readFileSync } from 'fs';
 import { ConfigService } from '@nestjs/config';
@@ -30,7 +34,11 @@ export class PdfPipelineService {
    * Bước 1 — Lấy ảnh preview của từng trang từ Python API, trả về cho frontend để chọn trang.
    * Chưa trích xuất text / Chunk / Embed.
    */
-  async extractText(pdfUploadId: string): Promise<ParsedPdfResult & { previews?: Array<{ page: number; thumbnail: string }> }> {
+  async extractText(
+    pdfUploadId: string,
+  ): Promise<
+    ParsedPdfResult & { previews?: Array<{ page: number; thumbnail: string }> }
+  > {
     const record = await this.prisma.pdfUpload.findUniqueOrThrow({
       where: { id: pdfUploadId },
     });
@@ -40,12 +48,14 @@ export class PdfPipelineService {
     try {
       const buffer = readFileSync(record.filePath);
       const fileBlob = new Blob([buffer], { type: 'application/pdf' });
-      
+
       const formData = new FormData();
       formData.append('file', fileBlob, record.fileName);
 
-      this.logger.log(`Sending PDF to Python previewer at ${this.fastApiBaseUrl}/pdf-previews`);
-      
+      this.logger.log(
+        `Sending PDF to Python previewer at ${this.fastApiBaseUrl}/pdf-previews`,
+      );
+
       const response = await fetch(`${this.fastApiBaseUrl}/pdf-previews`, {
         method: 'POST',
         body: formData,
@@ -57,7 +67,10 @@ export class PdfPipelineService {
         );
       }
 
-      const result = (await response.json()) as { numPages: number; previews: Array<{ page: number; thumbnail: string }> };
+      const result = (await response.json()) as {
+        numPages: number;
+        previews: Array<{ page: number; thumbnail: string }>;
+      };
 
       this.logger.log(
         `Generated ${result.numPages} preview pages successfully from Python`,
@@ -70,7 +83,10 @@ export class PdfPipelineService {
         previews: result.previews,
       };
     } catch (error) {
-      this.logger.error(`Failed to generate previews for PDF ${record.fileName}`, error);
+      this.logger.error(
+        `Failed to generate previews for PDF ${record.fileName}`,
+        error,
+      );
       await this.prisma.pdfUpload.update({
         where: { id: pdfUploadId },
         data: { status: 'FAILED' },
@@ -102,15 +118,17 @@ export class PdfPipelineService {
 
       const buffer = readFileSync(record.filePath);
       const fileBlob = new Blob([buffer], { type: 'application/pdf' });
-      
+
       const formData = new FormData();
       formData.append('file', fileBlob, record.fileName);
       if (selectedPages && selectedPages.length > 0) {
         formData.append('pages', JSON.stringify(selectedPages));
       }
 
-      this.logger.log(`Sending PDF to Python extractor at ${this.fastApiBaseUrl}/extract-pdf`);
-      
+      this.logger.log(
+        `Sending PDF to Python extractor at ${this.fastApiBaseUrl}/extract-pdf`,
+      );
+
       const response = await fetch(`${this.fastApiBaseUrl}/extract-pdf`, {
         method: 'POST',
         body: formData,
@@ -122,7 +140,10 @@ export class PdfPipelineService {
         );
       }
 
-      const result = (await response.json()) as { text: string; numPages: number };
+      const result = (await response.json()) as {
+        text: string;
+        numPages: number;
+      };
       const cleanedText = this.cleanText(result.text);
 
       // Chia chunk
@@ -163,14 +184,14 @@ export class PdfPipelineService {
 
   private cleanText(raw: string): string {
     return raw
-      .replace(/\n{3,}/g, '\n\n')                      // nhiều dòng trống liên tiếp
+      .replace(/\n{3,}/g, '\n\n') // nhiều dòng trống liên tiếp
       .trim();
   }
 
   private chunkText(text: string): string[] {
     const CHUNK_SIZE = 1000;
-    const OVERLAP    = 200;
-    const step       = CHUNK_SIZE - OVERLAP;
+    const OVERLAP = 200;
+    const step = CHUNK_SIZE - OVERLAP;
     const chunks: string[] = [];
 
     for (let start = 0; start < text.length; start += step) {
