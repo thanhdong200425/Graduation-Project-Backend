@@ -2,6 +2,45 @@ import { Injectable, ConflictException, NotFoundException, GoneException } from 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExamSessionDto } from './dto/create-exam-session.dto';
 import { SubmitExamDto } from './dto/submit-exam.dto';
+import type {
+  AnalyticsOverviewResponseDto,
+  QuestionAccuracyDto,
+  SessionAnalyticsDetailDto,
+  SessionAnalyticsSummaryDto,
+  SessionSubmissionAnalyticsDto,
+  SubmissionAnswerDto,
+} from './dto/session-analytics.dto';
+
+type SubmissionWithScore = {
+  submittedAt: Date | null;
+  score: number | null;
+};
+
+function computeSubmissionStats(submissions: SubmissionWithScore[]) {
+  const startedCount = submissions.length;
+  const submitted = submissions.filter((s) => s.submittedAt != null && s.score != null);
+  const submittedCount = submitted.length;
+  const scores = submitted.map((s) => s.score as number);
+
+  if (scores.length === 0) {
+    return {
+      startedCount,
+      submittedCount,
+      avgScore: null as number | null,
+      minScore: null as number | null,
+      maxScore: null as number | null,
+    };
+  }
+
+  const sum = scores.reduce((a, b) => a + b, 0);
+  return {
+    startedCount,
+    submittedCount,
+    avgScore: Math.round((sum / scores.length) * 10) / 10,
+    minScore: Math.min(...scores),
+    maxScore: Math.max(...scores),
+  };
+}
 
 @Injectable()
 export class ExamSessionsService {
@@ -363,5 +402,161 @@ export class ExamSessionsService {
         }),
       };
     }
+  }
+
+  async getAnalyticsOverview(teacherId: string): Promise<AnalyticsOverviewResponseDto> {
+    const sessions = await this.prisma.examSession.findMany({
+      where: { teacherId },
+      include: {
+        exam: {
+          include: {
+            subject: true,
+            examItems: true,
+          },
+        },
+        submissions: {
+          select: {
+            submittedAt: true,
+            score: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const sessionSummaries: SessionAnalyticsSummaryDto[] = sessions.map((session) => {
+      const stats = computeSubmissionStats(session.submissions);
+      return {
+        sessionId: session.id,
+        examId: session.examId,
+        title: session.exam.title,
+        subjectName: session.exam.subject?.name ?? null,
+        grade: session.exam.subject?.grade ?? null,
+        questionCount: session.exam.examItems.length,
+        inviteCode: session.inviteCode,
+        status: session.status,
+        createdAt: session.createdAt.toISOString(),
+        ...stats,
+      };
+    });
+
+    const allSubmissions = sessions.flatMap((s) => s.submissions);
+    const totalsStats = computeSubmissionStats(allSubmissions);
+
+    return {
+      sessions: sessionSummaries,
+      totals: {
+        submittedCount: totalsStats.submittedCount,
+        startedCount: totalsStats.startedCount,
+        avgScore: totalsStats.avgScore,
+        sessionCount: sessions.length,
+      },
+    };
+  }
+
+  async getSessionAnalytics(
+    sessionId: string,
+    teacherId: string,
+  ): Promise<SessionAnalyticsDetailDto> {
+    const session = await this.prisma.examSession.findFirst({
+      where: { id: sessionId, teacherId },
+      include: {
+        exam: {
+          include: {
+            subject: true,
+            examItems: {
+              orderBy: { orderIndex: 'asc' },
+            },
+          },
+        },
+        submissions: {
+          include: {
+            student: { select: { id: true, name: true } },
+            answerDetails: true,
+          },
+          orderBy: { startedAt: 'desc' },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const now = Date.now();
+    const examItems = session.exam.examItems;
+
+    const submittedSubmissions = session.submissions.filter((s) => s.submittedAt != null);
+
+    const questionAccuracy: QuestionAccuracyDto[] = examItems.map((item) => {
+      if (submittedSubmissions.length === 0) {
+        return {
+          orderIndex: item.orderIndex,
+          questionId: item.questionId,
+          correctRate: 0,
+        };
+      }
+
+      let correctCount = 0;
+      for (const sub of submittedSubmissions) {
+        const detail = sub.answerDetails.find((d) => d.questionId === item.questionId);
+        if (detail?.isCorrect) {
+          correctCount++;
+        }
+      }
+
+      return {
+        orderIndex: item.orderIndex,
+        questionId: item.questionId,
+        correctRate: correctCount / submittedSubmissions.length,
+      };
+    });
+
+    const submissions: SessionSubmissionAnalyticsDto[] = session.submissions.map((sub) => {
+      const endMs = sub.submittedAt ? sub.submittedAt.getTime() : now;
+      const timeSecs = Math.floor((endMs - sub.startedAt.getTime()) / 1000);
+
+      let answers: SubmissionAnswerDto[] = [];
+      if (sub.submittedAt) {
+        answers = examItems.map((item) => {
+          const detail = sub.answerDetails.find((d) => d.questionId === item.questionId);
+          return {
+            orderIndex: item.orderIndex,
+            questionId: item.questionId,
+            isCorrect: detail?.isCorrect ?? false,
+          };
+        });
+      }
+
+      return {
+        id: sub.id,
+        studentId: sub.studentId,
+        studentName: sub.student.name,
+        score: sub.score,
+        totalCorrect: sub.totalCorrect,
+        totalQuestions: sub.totalQuestions,
+        startedAt: sub.startedAt.toISOString(),
+        submittedAt: sub.submittedAt?.toISOString() ?? null,
+        timeSecs,
+        answers,
+      };
+    });
+
+    const stats = computeSubmissionStats(session.submissions);
+
+    return {
+      sessionId: session.id,
+      examId: session.examId,
+      title: session.exam.title,
+      subjectName: session.exam.subject?.name ?? null,
+      grade: session.exam.subject?.grade ?? null,
+      questionCount: examItems.length,
+      inviteCode: session.inviteCode,
+      status: session.status,
+      createdAt: session.createdAt.toISOString(),
+      ...stats,
+      submissions,
+      questionAccuracy,
+    };
   }
 }

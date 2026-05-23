@@ -23,6 +23,19 @@ export class ExamSessionsController {
     return this.examSessionsService.generateUniqueCode();
   }
 
+  @Get('analytics/overview')
+  async getAnalyticsOverview(@Req() req: AuthRequest) {
+    return this.examSessionsService.getAnalyticsOverview(req.user.id);
+  }
+
+  @Get(':id/analytics')
+  async getSessionAnalytics(
+    @Param('id') id: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.examSessionsService.getSessionAnalytics(id, req.user.id);
+  }
+
   @Get('code/:code')
   async getByCode(@Param('code') code: string) {
     return this.examSessionsService.findByCode(code);
