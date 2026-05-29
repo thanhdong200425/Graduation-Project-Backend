@@ -6,11 +6,17 @@ datasource db {
   provider = "postgresql"
 }
 
+enum UserRole {
+  TEACHER
+  STUDENT
+}
+
 model User {
   id           String      @id @default(uuid())
   email        String      @unique
   passwordHash String
   name         String
+  role         UserRole    @default(TEACHER)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   pdfUploads   PdfUpload[]
@@ -263,7 +269,7 @@ model Submission {
   startedAt      DateTime  @default(now())
   submittedAt    DateTime?
   isAutoSubmit   Boolean   @default(false) // true if timer ran out
-  score          Float?    // percentage 0–100, calculated on submit
+  score          Float?    // 0–10
   totalCorrect   Int?
   totalQuestions Int
 
