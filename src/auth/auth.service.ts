@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { User } from '@prisma/client';
+import { User, UserRole } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
@@ -37,6 +37,7 @@ export class AuthService {
       email,
       name: registerDto.name.trim(),
       passwordHash,
+      role: registerDto.role ?? UserRole.TEACHER,
     });
 
     return this.buildAuthResponse(user);
@@ -56,6 +57,10 @@ export class AuthService {
     );
 
     if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (loginDto.role && user.role !== loginDto.role) {
       throw new UnauthorizedException('Invalid email or password');
     }
 

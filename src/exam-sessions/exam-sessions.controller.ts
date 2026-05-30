@@ -28,6 +28,11 @@ export class ExamSessionsController {
     return this.examSessionsService.getAnalyticsOverview(req.user.id);
   }
 
+  @Get('analytics/dashboard')
+  async getTeacherDashboard(@Req() req: AuthRequest) {
+    return this.examSessionsService.getTeacherDashboard(req.user.id);
+  }
+
   @Get(':id/analytics')
   async getSessionAnalytics(
     @Param('id') id: string,

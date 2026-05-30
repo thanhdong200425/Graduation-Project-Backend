@@ -10,6 +10,13 @@ import type {
   SessionSubmissionAnalyticsDto,
   SubmissionAnswerDto,
 } from './dto/session-analytics.dto';
+import type {
+  TeacherDashboardActivityPointDto,
+  TeacherDashboardDeltaDir,
+  TeacherDashboardExamStatus,
+  TeacherDashboardResponseDto,
+  TeacherDashboardStatDto,
+} from './dto/teacher-dashboard.dto';
 
 type SubmissionWithScore = {
   submittedAt: Date | null;
@@ -40,6 +47,146 @@ function computeSubmissionStats(submissions: SubmissionWithScore[]) {
     minScore: Math.min(...scores),
     maxScore: Math.max(...scores),
   };
+}
+
+const SUBJECT_PALETTE = [
+  '#0485F7',
+  '#7C3AED',
+  '#00BC7D',
+  '#F59E0B',
+  '#EF4444',
+  '#06B6D4',
+  '#8B5CF6',
+  '#EC4899',
+];
+
+function subjectColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return SUBJECT_PALETTE[Math.abs(hash) % SUBJECT_PALETTE.length];
+}
+
+function formatRelativeTime(date: Date, now = new Date()): string {
+  const diffMs = now.getTime() - date.getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function bucketSparkline(
+  dates: Date[],
+  bucketCount = 8,
+  now = new Date(),
+): number[] {
+  if (dates.length === 0) {
+    return Array.from({ length: bucketCount }, () => 0);
+  }
+
+  const dayMs = 86_400_000;
+  const oldest = dates.reduce(
+    (min, d) => (d.getTime() < min ? d.getTime() : min),
+    dates[0].getTime(),
+  );
+  const spanDays = Math.max(
+    1,
+    Math.ceil((now.getTime() - oldest) / dayMs),
+  );
+  const bucketDays = Math.max(1, Math.ceil(spanDays / bucketCount));
+
+  return Array.from({ length: bucketCount }, (_, i) => {
+    const bucketEnd = now.getTime() - i * bucketDays * dayMs;
+    const bucketStart = bucketEnd - bucketDays * dayMs;
+    return dates.filter((d) => {
+      const t = d.getTime();
+      return t >= bucketStart && t < bucketEnd;
+    }).length;
+  }).reverse();
+}
+
+function computeDelta(
+  current: number,
+  previous: number,
+): { delta: string; deltaDir: TeacherDashboardDeltaDir } {
+  const diff = current - previous;
+  if (diff === 0) {
+    return { delta: 'No change', deltaDir: 'flat' };
+  }
+  if (diff > 0) {
+    return { delta: `+${diff} this period`, deltaDir: 'up' };
+  }
+  return { delta: `${diff} this period`, deltaDir: 'down' };
+}
+
+function formatActivityAxisLabel(date: Date, range: '7d' | '30d' | '90d'): string {
+  const monthDay = date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  });
+
+  if (range === '7d') {
+    const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+    return `${weekday} ${monthDay}`;
+  }
+
+  return monthDay;
+}
+
+function buildActivitySeries(
+  dates: Date[],
+  range: '7d' | '30d' | '90d',
+  now = new Date(),
+): TeacherDashboardActivityPointDto[] {
+  const dayMs = 86_400_000;
+  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+  const from = new Date(now.getTime() - days * dayMs);
+
+  const inRange = dates.filter((d) => d.getTime() >= from.getTime());
+
+  if (range === '7d') {
+    return Array.from({ length: 7 }, (_, i) => {
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      dayStart.setDate(dayStart.getDate() - (6 - i));
+      const dayEnd = new Date(dayStart.getTime() + dayMs);
+      const value = inRange.filter(
+        (d) => d.getTime() >= dayStart.getTime() && d.getTime() < dayEnd.getTime(),
+      ).length;
+      return {
+        label: formatActivityAxisLabel(dayStart, '7d'),
+        value,
+      };
+    });
+  }
+
+  const pointCount = range === '30d' ? 30 : 90;
+  return Array.from({ length: pointCount }, (_, i) => {
+    const dayStart = new Date(from.getTime() + i * dayMs);
+    const dayEnd = new Date(dayStart.getTime() + dayMs);
+    const value = inRange.filter(
+      (d) => d.getTime() >= dayStart.getTime() && d.getTime() < dayEnd.getTime(),
+    ).length;
+    return {
+      label: formatActivityAxisLabel(dayStart, range),
+      value,
+    };
+  });
+}
+
+function resolveExamStatus(
+  sessionStatuses: string[],
+): TeacherDashboardExamStatus {
+  if (sessionStatuses.length === 0) return 'draft';
+  if (sessionStatuses.some((s) => s === 'DRAFT')) return 'draft';
+  if (sessionStatuses.some((s) => s === 'ACTIVE')) return 'ready';
+  return 'ready';
 }
 
 @Injectable()
@@ -557,6 +704,234 @@ export class ExamSessionsService {
       ...stats,
       submissions,
       questionAccuracy,
+    };
+  }
+
+  async getTeacherDashboard(
+    teacherId: string,
+  ): Promise<TeacherDashboardResponseDto> {
+    const now = new Date();
+    const weekMs = 7 * 86_400_000;
+    const periodStart = new Date(now.getTime() - weekMs);
+    const previousStart = new Date(now.getTime() - 2 * weekMs);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: teacherId },
+      select: { name: true },
+    });
+
+    const [exams, sessions] = await Promise.all([
+      this.prisma.exam.findMany({
+        where: {
+          sessions: { some: { teacherId } },
+        },
+        include: {
+          subject: true,
+          examItems: true,
+          sessions: {
+            where: { teacherId },
+            include: {
+              submissions: {
+                select: {
+                  studentId: true,
+                  submittedAt: true,
+                  score: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+      }),
+      this.prisma.examSession.findMany({
+        where: { teacherId },
+        include: {
+          submissions: {
+            select: {
+              studentId: true,
+              submittedAt: true,
+              score: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const allSubmissions = sessions.flatMap((s) => s.submissions);
+    const submittedRows = allSubmissions.filter(
+      (s): s is typeof s & { submittedAt: Date; score: number } =>
+        s.submittedAt != null && s.score != null,
+    );
+
+    const activeStudentIds = new Set(
+      submittedRows.map((s) => s.studentId),
+    );
+
+    const avgScore =
+      submittedRows.length > 0
+        ? submittedRows.reduce((sum, s) => sum + s.score, 0) /
+          submittedRows.length
+        : null;
+
+    const examCreatedDates = exams.map((e) => e.createdAt);
+    const submissionDates = submittedRows.map((s) => s.submittedAt);
+
+    const examsThisWeek = exams.filter(
+      (e) => e.createdAt.getTime() >= periodStart.getTime(),
+    ).length;
+    const examsPrevWeek = exams.filter(
+      (e) =>
+        e.createdAt.getTime() >= previousStart.getTime() &&
+        e.createdAt.getTime() < periodStart.getTime(),
+    ).length;
+
+    const questionsThisWeek = examsThisWeek
+      ? exams
+          .filter((e) => e.createdAt.getTime() >= periodStart.getTime())
+          .reduce((sum, e) => sum + e.totalQuestions, 0)
+      : 0;
+    const questionsPrevWeek = exams
+      .filter(
+        (e) =>
+          e.createdAt.getTime() >= previousStart.getTime() &&
+          e.createdAt.getTime() < periodStart.getTime(),
+      )
+      .reduce((sum, e) => sum + e.totalQuestions, 0);
+
+    const subsThisWeek = submittedRows.filter(
+      (s) => s.submittedAt.getTime() >= periodStart.getTime(),
+    );
+    const subsPrevWeek = submittedRows.filter(
+      (s) =>
+        s.submittedAt.getTime() >= previousStart.getTime() &&
+        s.submittedAt.getTime() < periodStart.getTime(),
+    );
+    const avgThisWeek =
+      subsThisWeek.length > 0
+        ? subsThisWeek.reduce((sum, s) => sum + s.score, 0) / subsThisWeek.length
+        : null;
+    const avgPrevWeek =
+      subsPrevWeek.length > 0
+        ? subsPrevWeek.reduce((sum, s) => sum + s.score, 0) / subsPrevWeek.length
+        : null;
+
+    const studentsThisWeek = new Set(
+      subsThisWeek.map((s) => s.studentId),
+    ).size;
+    const studentsPrevWeek = new Set(
+      subsPrevWeek.map((s) => s.studentId),
+    ).size;
+
+    const totalQuestions = exams.reduce((sum, e) => sum + e.totalQuestions, 0);
+
+    const examDelta = computeDelta(examsThisWeek, examsPrevWeek);
+    const questionDelta = computeDelta(questionsThisWeek, questionsPrevWeek);
+    const scoreDelta =
+      avgThisWeek != null && avgPrevWeek != null
+        ? computeDelta(
+            Math.round(avgThisWeek * 10),
+            Math.round(avgPrevWeek * 10),
+          )
+        : { delta: 'No data yet', deltaDir: 'flat' as TeacherDashboardDeltaDir };
+    const studentDelta = computeDelta(studentsThisWeek, studentsPrevWeek);
+
+    const stats: TeacherDashboardStatDto[] = [
+      {
+        label: 'Total exams',
+        value: String(exams.length),
+        delta: examDelta.delta,
+        deltaDir: examDelta.deltaDir,
+        sparkline: bucketSparkline(examCreatedDates),
+      },
+      {
+        label: 'Questions generated',
+        value: totalQuestions.toLocaleString('en-US'),
+        delta: questionDelta.delta,
+        deltaDir: questionDelta.deltaDir,
+        sparkline: bucketSparkline(
+          exams.flatMap((e) =>
+            Array.from({ length: e.totalQuestions }, () => e.createdAt),
+          ),
+        ),
+      },
+      {
+        label: 'Avg. score',
+        value: avgScore != null ? `${Math.round(avgScore * 10)}%` : '—',
+        delta:
+          avgThisWeek != null && avgPrevWeek != null
+            ? `${avgThisWeek >= avgPrevWeek ? '+' : ''}${(
+                (avgThisWeek - avgPrevWeek) *
+                10
+              ).toFixed(1)} pts`
+            : scoreDelta.delta,
+        deltaDir:
+          avgThisWeek != null && avgPrevWeek != null
+            ? avgThisWeek >= avgPrevWeek
+              ? 'up'
+              : 'down'
+            : scoreDelta.deltaDir,
+        sparkline: bucketSparkline(submissionDates),
+      },
+      {
+        label: 'Active students',
+        value: String(activeStudentIds.size),
+        delta: studentDelta.delta,
+        deltaDir: studentDelta.deltaDir,
+        sparkline: bucketSparkline(submissionDates),
+      },
+    ];
+
+    const subjectCounts = new Map<string, number>();
+    for (const exam of exams) {
+      const name = exam.subject?.name ?? 'Math';
+      subjectCounts.set(name, (subjectCounts.get(name) ?? 0) + 1);
+    }
+
+    const subjects = [...subjectCounts.entries()]
+      .map(([name, count]) => ({
+        name,
+        count,
+        color: subjectColor(name),
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const recentExams = exams.slice(0, 12).map((exam) => {
+      const teacherSessions = exam.sessions;
+      const assigned = teacherSessions.reduce((sum, session) => {
+        const submitted = session.submissions.filter(
+          (s) => s.submittedAt != null,
+        ).length;
+        return sum + submitted;
+      }, 0);
+
+      return {
+        id: exam.id,
+        title: exam.title,
+        subject: exam.subject?.name ?? 'Math',
+        questions: exam.examItems.length || exam.totalQuestions,
+        assigned,
+        status: resolveExamStatus(teacherSessions.map((s) => s.status)),
+        updated: formatRelativeTime(exam.updatedAt, now),
+        thumbColor: subjectColor(exam.subject?.name ?? 'Math'),
+      };
+    });
+
+    return {
+      teacherName: user?.name ?? 'Instructor',
+      hero: {
+        pendingReviewCount: sessions.filter((s) => s.status === 'DRAFT').length,
+        activeStudentCount: activeStudentIds.size,
+      },
+      stats,
+      activity: {
+        '7d': buildActivitySeries(examCreatedDates, '7d', now),
+        '30d': buildActivitySeries(examCreatedDates, '30d', now),
+        '90d': buildActivitySeries(examCreatedDates, '90d', now),
+      },
+      subjects,
+      recentExams,
     };
   }
 }

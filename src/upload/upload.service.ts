@@ -7,7 +7,6 @@ import { PdfUpload } from '@prisma/client';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { checkFileIsExists } from '../../helpers/file';
 import { MongodbService } from '../mongodb/mongodb.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QdrantService } from '../qdrant/qdrant.service';
@@ -52,7 +51,7 @@ export class UploadService {
 
       const savedName = `${fileHash}.pdf`;
       const filePath = join(UPLOAD_DIR, savedName);
-      const isFileExisted = await checkFileIsExists(UPLOAD_DIR, savedName);
+      const isFileExisted = existsSync(filePath);
       if (!isFileExisted) {
         writeFileSync(filePath, file.buffer);
       }
