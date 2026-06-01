@@ -17,6 +17,7 @@ import { MongodbModule } from './mongodb/mongodb.module';
 import { QdrantModule } from './qdrant/qdrant.module';
 import { ExamSessionsModule } from './exam-sessions/exam-sessions.module';
 import { StudentAnalyticsModule } from './student-analytics/student-analytics.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { StudentAnalyticsModule } from './student-analytics/student-analytics.mo
     QdrantModule,
     ExamSessionsModule,
     StudentAnalyticsModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -21,7 +21,8 @@
     "prisma": "prisma",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "create-admin": "ts-node scripts/create-admin.ts"
   },
   "dependencies": {
     "@langchain/core": "^1.1.33",
