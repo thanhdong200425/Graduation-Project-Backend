@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
 import type { StringValue } from 'ms';
 import { AdminController } from './admin.controller';
 import { AdminService } from './admin.service';
@@ -8,6 +9,7 @@ import { AdminJwtStrategy } from './admin-jwt.strategy';
 
 @Module({
   imports: [
+    ConfigModule,
     JwtModule.registerAsync({
       useFactory: () => {
         const jwtSecret = process.env.JWT_SECRET;

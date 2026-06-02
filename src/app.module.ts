@@ -18,10 +18,12 @@ import { QdrantModule } from './qdrant/qdrant.module';
 import { ExamSessionsModule } from './exam-sessions/exam-sessions.module';
 import { StudentAnalyticsModule } from './student-analytics/student-analytics.module';
 import { AdminModule } from './admin/admin.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
     PrismaModule,
+    MailModule,
     UsersModule,
     AuthModule,
     ExamGenerationModule,

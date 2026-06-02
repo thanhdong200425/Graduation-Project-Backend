@@ -58,4 +58,10 @@ export class AdminController {
   deleteUser(@Param('id') id: string) {
     return this.adminService.deleteUser(id);
   }
+
+  @Post('users/:id/send-reset-link')
+  @UseGuards(AdminJwtGuard)
+  sendPasswordResetLink(@Param('id') id: string) {
+    return this.adminService.sendPasswordResetLink(id);
+  }
 }

@@ -6,9 +6,12 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { Admin, Prisma, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { AdminJwtPayload } from './interfaces/admin-jwt-payload.interface';
+import { MailService } from '../mail/mail.service';
 
 export const safeAdminSelect = {
   id: true,
@@ -27,6 +30,8 @@ export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   async login(loginDto: AdminLoginDto) {
@@ -126,6 +131,34 @@ export class AdminService {
   async deleteUser(id: string): Promise<void> {
     await this.ensureUserExists(id);
     await this.prisma.user.delete({ where: { id } });
+  }
+
+  async sendPasswordResetLink(userId: string): Promise<{ message: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw new NotFoundException(`User ${userId} not found`);
+
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await this.prisma.passwordResetToken.create({
+      data: { token, userId, expiresAt },
+    });
+
+    const frontendUrl =
+      this.configService.getOrThrow<string>('FRONTEND_URL') ??
+      'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+    await this.mailService.sendPasswordResetEmail(
+      user.email,
+      user.name,
+      resetLink,
+    );
+
+    return { message: 'Reset link sent' };
   }
 
   private async ensureUserExists(id: string): Promise<void> {
