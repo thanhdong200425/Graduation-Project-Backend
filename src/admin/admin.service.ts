@@ -1,6 +1,10 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Admin, Prisma } from '@prisma/client';
+import { Admin, Prisma, UserStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
@@ -79,5 +83,53 @@ export class AdminService {
       createdAt: admin.createdAt,
       updatedAt: admin.updatedAt,
     };
+  }
+
+  /* ── User management ── */
+
+  private readonly adminUserSelect = {
+    id: true,
+    name: true,
+    email: true,
+    role: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+    _count: { select: { studentSubmissions: true } },
+  } satisfies Prisma.UserSelect;
+
+  async findAllUsers() {
+    return this.prisma.user.findMany({
+      select: this.adminUserSelect,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async suspendUser(id: string) {
+    await this.ensureUserExists(id);
+    return this.prisma.user.update({
+      select: this.adminUserSelect,
+      where: { id },
+      data: { status: UserStatus.SUSPENDED },
+    });
+  }
+
+  async activateUser(id: string) {
+    await this.ensureUserExists(id);
+    return this.prisma.user.update({
+      select: this.adminUserSelect,
+      where: { id },
+      data: { status: UserStatus.ACTIVE },
+    });
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.ensureUserExists(id);
+    await this.prisma.user.delete({ where: { id } });
+  }
+
+  private async ensureUserExists(id: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException(`User ${id} not found`);
   }
 }

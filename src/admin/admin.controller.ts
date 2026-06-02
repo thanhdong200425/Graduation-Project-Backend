@@ -1,9 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -27,5 +30,32 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   getMe(@Req() req: AdminAuthRequest) {
     return req.admin;
+  }
+
+  /* ── User management ── */
+
+  @Get('users')
+  @UseGuards(AdminJwtGuard)
+  findAllUsers() {
+    return this.adminService.findAllUsers();
+  }
+
+  @Patch('users/:id/suspend')
+  @UseGuards(AdminJwtGuard)
+  suspendUser(@Param('id') id: string) {
+    return this.adminService.suspendUser(id);
+  }
+
+  @Patch('users/:id/activate')
+  @UseGuards(AdminJwtGuard)
+  activateUser(@Param('id') id: string) {
+    return this.adminService.activateUser(id);
+  }
+
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AdminJwtGuard)
+  deleteUser(@Param('id') id: string) {
+    return this.adminService.deleteUser(id);
   }
 }

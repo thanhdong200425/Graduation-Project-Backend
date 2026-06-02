@@ -11,12 +11,18 @@ enum UserRole {
   STUDENT
 }
 
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 model User {
   id           String      @id @default(uuid())
   email        String      @unique
   passwordHash String
   name         String
   role         UserRole    @default(TEACHER)
+  status       UserStatus  @default(ACTIVE)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   pdfUploads   PdfUpload[]
