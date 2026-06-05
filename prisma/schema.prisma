@@ -16,6 +16,11 @@ enum UserStatus {
   SUSPENDED
 }
 
+enum UserActivityAction {
+  LOGIN
+  CREATE_ACCOUNT
+}
+
 model User {
   id           String      @id @default(uuid())
   email        String      @unique
@@ -26,10 +31,23 @@ model User {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   pdfUploads   PdfUpload[]
-  
+  activities   UserActivity[]
+
   teacherSessions      ExamSession[]        @relation("TeacherSessions")
   studentSubmissions   Submission[]         @relation("StudentSubmissions")
   passwordResetTokens  PasswordResetToken[]
+}
+
+model UserActivity {
+  id        String             @id @default(uuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    UserActivityAction
+  createdAt DateTime           @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_activities")
 }
 
 model PasswordResetToken {

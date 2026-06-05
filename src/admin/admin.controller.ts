@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -63,5 +64,20 @@ export class AdminController {
   @UseGuards(AdminJwtGuard)
   sendPasswordResetLink(@Param('id') id: string) {
     return this.adminService.sendPasswordResetLink(id);
+  }
+
+  /* ── Analytics ── */
+
+  @Get('analytics/overview')
+  @UseGuards(AdminJwtGuard)
+  getAnalyticsOverview() {
+    return this.adminService.getAnalyticsOverview();
+  }
+
+  @Get('analytics/dau-chart')
+  @UseGuards(AdminJwtGuard)
+  getDauChart(@Query('range') range?: string) {
+    const validRange = range === '7d' || range === '30d' ? range : '90d';
+    return this.adminService.getDauChart(validRange);
   }
 }

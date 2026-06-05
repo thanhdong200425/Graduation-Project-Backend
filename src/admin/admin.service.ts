@@ -4,7 +4,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Admin, Prisma, UserStatus } from '@prisma/client';
+import {
+  Admin,
+  Prisma,
+  UserActivityAction,
+  UserRole,
+  UserStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -12,6 +18,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { AdminJwtPayload } from './interfaces/admin-jwt-payload.interface';
 import { MailService } from '../mail/mail.service';
+import {
+  AdminAnalyticsOverviewDto,
+  AdminDauChartDto,
+  DauPointDto,
+} from './dto/admin-analytics.dto';
+import { startOfDay, startOfMonth, startOfWeek } from 'date-fns';
 
 export const safeAdminSelect = {
   id: true,
@@ -164,5 +176,81 @@ export class AdminService {
   private async ensureUserExists(id: string): Promise<void> {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException(`User ${id} not found`);
+  }
+
+  /* ── Analytics ── */
+
+  async getAnalyticsOverview(): Promise<AdminAnalyticsOverviewDto> {
+    const todayUTC = startOfDay(new Date());
+    const weekStart = startOfWeek(todayUTC);
+    const monthStart = startOfMonth(todayUTC);
+
+    const [
+      totalUsers,
+      teachers,
+      students,
+      dauGroups,
+      examToday,
+      examThisWeek,
+      examThisMonth,
+    ] = await Promise.all([
+      this.prisma.user.count(),
+      this.prisma.user.count({ where: { role: UserRole.TEACHER } }),
+      this.prisma.user.count({ where: { role: UserRole.STUDENT } }),
+      this.prisma.userActivity.groupBy({
+        by: ['userId'],
+        where: {
+          action: UserActivityAction.LOGIN,
+          createdAt: { gte: todayUTC },
+        },
+      }),
+      this.prisma.exam.count({ where: { createdAt: { gte: todayUTC } } }),
+      this.prisma.exam.count({ where: { createdAt: { gte: weekStart } } }),
+      this.prisma.exam.count({ where: { createdAt: { gte: monthStart } } }),
+    ]);
+
+    return {
+      totalUsers,
+      teachers,
+      students,
+      dau: dauGroups.length,
+      examToday,
+      examThisWeek,
+      examThisMonth,
+    };
+  }
+
+  async getDauChart(range: '7d' | '30d' | '90d'): Promise<AdminDauChartDto> {
+    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
+    const now = new Date();
+    const todayUTC = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+    );
+    const rangeStart = new Date(
+      todayUTC.getTime() - (days - 1) * 24 * 60 * 60 * 1000,
+    );
+
+    const activities = await this.prisma.userActivity.findMany({
+      where: {
+        action: UserActivityAction.LOGIN,
+        createdAt: { gte: rangeStart },
+      },
+      select: { userId: true, createdAt: true },
+    });
+
+    const byDay = new Map<string, Set<string>>();
+    for (const a of activities) {
+      const dayKey = a.createdAt.toISOString().slice(0, 10);
+      if (!byDay.has(dayKey)) byDay.set(dayKey, new Set());
+      byDay.get(dayKey)!.add(a.userId);
+    }
+
+    const data: DauPointDto[] = Array.from({ length: days }, (_, i) => {
+      const d = new Date(rangeStart.getTime() + i * 24 * 60 * 60 * 1000);
+      const dayKey = d.toISOString().slice(0, 10);
+      return { date: dayKey, value: byDay.get(dayKey)?.size ?? 0 };
+    });
+
+    return { data };
   }
 }

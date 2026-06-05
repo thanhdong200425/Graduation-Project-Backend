@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
-import { User, UserRole, UserStatus } from '@prisma/client';
+import { User, UserActivityAction, UserRole, UserStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
@@ -44,6 +44,7 @@ export class AuthService {
       role: registerDto.role ?? UserRole.TEACHER,
     });
 
+    await this.prisma.userActivity.create({ data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT } });
     return this.buildAuthResponse(user);
   }
 
@@ -72,6 +73,7 @@ export class AuthService {
       throw new ForbiddenException('ACCOUNT_SUSPENDED');
     }
 
+    await this.prisma.userActivity.create({ data: { userId: user.id, action: UserActivityAction.LOGIN } });
     return this.buildAuthResponse(user);
   }
 
