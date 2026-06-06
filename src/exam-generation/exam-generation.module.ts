@@ -7,9 +7,10 @@ import { QuestionPromptService } from './services/question-prompt.service';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionValidationService } from './services/question-validation.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { CreditsModule } from '../credits/credits.module';
 
 @Module({
-  imports: [ConfigModule, PrismaModule],
+  imports: [ConfigModule, PrismaModule, CreditsModule],
   controllers: [ExamGenerationController],
   providers: [
     ExamGenerationService,

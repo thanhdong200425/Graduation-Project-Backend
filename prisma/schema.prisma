@@ -11,18 +11,67 @@ enum UserRole {
   STUDENT
 }
 
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserActivityAction {
+  LOGIN
+  CREATE_ACCOUNT
+}
+
 model User {
   id           String      @id @default(uuid())
   email        String      @unique
   passwordHash String
   name         String
   role         UserRole    @default(TEACHER)
+  status       UserStatus  @default(ACTIVE)
+  creditQuota  Int?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   pdfUploads   PdfUpload[]
-  
-  teacherSessions    ExamSession[] @relation("TeacherSessions")
-  studentSubmissions Submission[]  @relation("StudentSubmissions")
+  activities   UserActivity[]
+
+  teacherSessions      ExamSession[]        @relation("TeacherSessions")
+  studentSubmissions   Submission[]         @relation("StudentSubmissions")
+  passwordResetTokens  PasswordResetToken[]
+  tokenUsageLogs       TokenUsageLog[]
+  generationJobs       GenerationJob[]
+}
+
+model UserActivity {
+  id        String             @id @default(uuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    UserActivityAction
+  createdAt DateTime           @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_activities")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("password_reset_tokens")
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model PdfUpload {
@@ -216,14 +265,45 @@ enum CurrentStep {
 
 model GenerationJob {
   id        String           @id @default(uuid())
+  userId    String?
   status    GenerationStatus @default(PENDING)
   progress  Int              @default(0)
   result    Json?
   error     String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tokenUsageLogs TokenUsageLog[]
 
+  @@index([userId])
   @@map("generation_jobs")
+}
+
+model TokenUsageLog {
+  id               String         @id @default(uuid())
+  userId           String
+  jobId            String?
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  costUsd          Float
+  model            String
+  createdAt        DateTime       @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job              GenerationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("token_usage_logs")
+}
+
+model CreditSetting {
+  id                String   @id @default("global")
+  defaultQuota      Int      @default(100)
+  alertThresholdPct Int      @default(80)
+  updatedAt         DateTime @updatedAt
+
+  @@map("credit_settings")
 }
 
 enum GenerationStatus {
