@@ -6,9 +6,11 @@ import {
   HttpStatus,
   Param,
   Post,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
 import { GenerateQuestionsDto } from './dto/generate-questions.dto';
 import { ExamGenerationService } from './exam-generation.service';
 
@@ -21,8 +23,9 @@ export class ExamGenerationController {
   @HttpCode(HttpStatus.CREATED)
   async generateQuestions(
     @Body() body: GenerateQuestionsDto,
+    @Req() req: AuthRequest,
   ): Promise<{ jobId: string }> {
-    return this.examGenerationService.createJob(body);
+    return this.examGenerationService.createJob(req.user.id, body);
   }
 
   @Get('/jobs/:id')

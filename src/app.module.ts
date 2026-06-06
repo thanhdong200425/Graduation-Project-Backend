@@ -19,6 +19,7 @@ import { ExamSessionsModule } from './exam-sessions/exam-sessions.module';
 import { StudentAnalyticsModule } from './student-analytics/student-analytics.module';
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
+import { CreditsModule } from './credits/credits.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { MailModule } from './mail/mail.module';
     ExamSessionsModule,
     StudentAnalyticsModule,
     AdminModule,
+    CreditsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

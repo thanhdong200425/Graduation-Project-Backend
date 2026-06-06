@@ -18,6 +18,11 @@ import {
 } from '../types/question.types';
 import { QuestionValidationService } from './question-validation.service';
 
+export interface QuestionGenerationUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
 const QuestionGenerationState = Annotation.Root({
   uploadIds: Annotation<string[]>,
   numQuestions: Annotation<number>,
@@ -29,12 +34,14 @@ const QuestionGenerationState = Annotation.Root({
   questions: Annotation<GeneratedQuestion[]>,
   query: Annotation<string>,
   chunksScore: Annotation<ChunkScore[]>,
+  usage: Annotation<QuestionGenerationUsage>,
 });
 
 @Injectable()
 export class QuestionGenerationGraphService {
   private readonly llm: BaseChatModel;
   private readonly llmProvider: QuestionLlmProvider;
+  private readonly modelLabel: string;
   private readonly rerankServiceBaseUrl: string;
 
   constructor(
@@ -46,6 +53,11 @@ export class QuestionGenerationGraphService {
     const { llm, provider } = createQuestionLlm(configService);
     this.llm = llm;
     this.llmProvider = provider;
+    this.modelLabel =
+      provider === 'gemini'
+        ? (configService.get<string>('GEMINI_MODEL')?.trim() ??
+          'gemini-2.0-flash')
+        : (configService.get<string>('OLLAMA_MODEL')?.trim() ?? 'ollama');
     this.rerankServiceBaseUrl =
       configService.getOrThrow<string>('FASTAPI_BASE_URL');
   }
@@ -59,7 +71,11 @@ export class QuestionGenerationGraphService {
     options?: {
       onProgress?: (progress: number) => Promise<void>;
     },
-  ): Promise<GeneratedQuestion[]> {
+  ): Promise<{
+    questions: GeneratedQuestion[];
+    usage: QuestionGenerationUsage;
+    model: string;
+  }> {
     const report = async (pct: number) => {
       if (options?.onProgress) await options.onProgress(pct);
     };
@@ -143,10 +159,26 @@ export class QuestionGenerationGraphService {
       })
       .addNode('generateQuestions', async (state) => {
         let content = '';
+        let usage: QuestionGenerationUsage = {
+          promptTokens: 0,
+          completionTokens: 0,
+        };
         try {
           const response = await this.llm.invoke(state.prompt);
           content =
             typeof response.content === 'string' ? response.content : '';
+          const meta = (
+            response as {
+              usage_metadata?: {
+                input_tokens?: number;
+                output_tokens?: number;
+              };
+            }
+          ).usage_metadata;
+          usage = {
+            promptTokens: meta?.input_tokens ?? 0,
+            completionTokens: meta?.output_tokens ?? 0,
+          };
         } catch (error: unknown) {
           console.error('[CRITICAL ERROR] LLM execution failed:', error);
           if (
@@ -190,7 +222,7 @@ export class QuestionGenerationGraphService {
         }
 
         await report(85);
-        return { rawModelOutput: content, questions: parsed };
+        return { rawModelOutput: content, questions: parsed, usage };
       })
       .addNode('classifyDifficulty', async (state) => {
         const payload = {
@@ -254,9 +286,14 @@ export class QuestionGenerationGraphService {
       questions: [],
       query: '',
       chunksScore: [],
+      usage: { promptTokens: 0, completionTokens: 0 },
     });
 
-    return result.questions;
+    return {
+      questions: result.questions,
+      usage: result.usage,
+      model: this.modelLabel,
+    };
   }
 
   private extractDifficultyResults(

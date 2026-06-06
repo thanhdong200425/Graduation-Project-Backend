@@ -28,6 +28,7 @@ model User {
   name         String
   role         UserRole    @default(TEACHER)
   status       UserStatus  @default(ACTIVE)
+  creditQuota  Int?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   pdfUploads   PdfUpload[]
@@ -36,6 +37,8 @@ model User {
   teacherSessions      ExamSession[]        @relation("TeacherSessions")
   studentSubmissions   Submission[]         @relation("StudentSubmissions")
   passwordResetTokens  PasswordResetToken[]
+  tokenUsageLogs       TokenUsageLog[]
+  generationJobs       GenerationJob[]
 }
 
 model UserActivity {
@@ -262,14 +265,45 @@ enum CurrentStep {
 
 model GenerationJob {
   id        String           @id @default(uuid())
+  userId    String?
   status    GenerationStatus @default(PENDING)
   progress  Int              @default(0)
   result    Json?
   error     String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
+  user      User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tokenUsageLogs TokenUsageLog[]
 
+  @@index([userId])
   @@map("generation_jobs")
+}
+
+model TokenUsageLog {
+  id               String         @id @default(uuid())
+  userId           String
+  jobId            String?
+  promptTokens     Int
+  completionTokens Int
+  totalTokens      Int
+  costUsd          Float
+  model            String
+  createdAt        DateTime       @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job              GenerationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("token_usage_logs")
+}
+
+model CreditSetting {
+  id                String   @id @default("global")
+  defaultQuota      Int      @default(100)
+  alertThresholdPct Int      @default(80)
+  updatedAt         DateTime @updatedAt
+
+  @@map("credit_settings")
 }
 
 enum GenerationStatus {
