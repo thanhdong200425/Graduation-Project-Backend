@@ -12,14 +12,20 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { AdminHealthService } from './admin-health.service';
 import { AdminService } from './admin.service';
+import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { AdminUpdateProfileDto } from './dto/admin-update-profile.dto';
 import { AdminJwtGuard } from './admin-jwt.guard';
 import type { AdminAuthRequest } from './interfaces/admin-auth-request.interface';
 
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly adminHealthService: AdminHealthService,
+  ) {}
 
   @Post('auth/login')
   @HttpCode(HttpStatus.OK)
@@ -30,7 +36,32 @@ export class AdminController {
   @Get('auth/me')
   @UseGuards(AdminJwtGuard)
   getMe(@Req() req: AdminAuthRequest) {
-    return req.admin;
+    return req.user;
+  }
+
+  @Get('health')
+  @UseGuards(AdminJwtGuard)
+  getHealth() {
+    return this.adminHealthService.getStatus();
+  }
+
+  @Patch('auth/profile')
+  @UseGuards(AdminJwtGuard)
+  updateProfile(
+    @Req() req: AdminAuthRequest,
+    @Body() dto: AdminUpdateProfileDto,
+  ) {
+    return this.adminService.updateProfile(req.user.id, dto);
+  }
+
+  @Patch('auth/password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(AdminJwtGuard)
+  changePassword(
+    @Req() req: AdminAuthRequest,
+    @Body() dto: AdminChangePasswordDto,
+  ) {
+    return this.adminService.changePassword(req.user.id, dto);
   }
 
   /* ── User management ── */

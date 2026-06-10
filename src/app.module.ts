@@ -20,6 +20,8 @@ import { StudentAnalyticsModule } from './student-analytics/student-analytics.mo
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
 import { CreditsModule } from './credits/credits.module';
+import { TeacherActivityModule } from './teacher-activity/teacher-activity.module';
+import { TeacherCreditsModule } from './teacher-credits/teacher-credits.module';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { CreditsModule } from './credits/credits.module';
     StudentAnalyticsModule,
     AdminModule,
     CreditsModule,
+    TeacherActivityModule,
+    TeacherCreditsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

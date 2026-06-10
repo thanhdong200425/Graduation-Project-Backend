@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -15,7 +17,9 @@ import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
+import { AdminUpdateProfileDto } from './dto/admin-update-profile.dto';
 import { AdminJwtPayload } from './interfaces/admin-jwt-payload.interface';
 import { MailService } from '../mail/mail.service';
 import {
@@ -36,6 +40,8 @@ export const safeAdminSelect = {
 export type SafeAdmin = Prisma.AdminGetPayload<{
   select: typeof safeAdminSelect;
 }>;
+
+const BCRYPT_SALT_ROUNDS = 10;
 
 @Injectable()
 export class AdminService {
@@ -100,6 +106,66 @@ export class AdminService {
       createdAt: admin.createdAt,
       updatedAt: admin.updatedAt,
     };
+  }
+
+  async updateProfile(
+    adminId: string,
+    dto: AdminUpdateProfileDto,
+  ): Promise<SafeAdmin> {
+    const email = dto.email.trim().toLowerCase();
+    const name = dto.name.trim();
+
+    const existing = await this.prisma.admin.findUnique({
+      where: { email },
+    });
+
+    if (existing && existing.id !== adminId) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    return this.prisma.admin.update({
+      where: { id: adminId },
+      data: { email, name },
+      select: safeAdminSelect,
+    });
+  }
+
+  async changePassword(
+    adminId: string,
+    dto: AdminChangePasswordDto,
+  ): Promise<void> {
+    const admin = await this.prisma.admin.findUnique({
+      where: { id: adminId },
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Administrator not found');
+    }
+
+    const isCurrentValid = await bcrypt.compare(
+      dto.currentPassword,
+      admin.passwordHash,
+    );
+
+    if (!isCurrentValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(
+      dto.newPassword,
+      BCRYPT_SALT_ROUNDS,
+    );
+
+    await this.prisma.admin.update({
+      where: { id: adminId },
+      data: { passwordHash },
+    });
   }
 
   /* ── User management ── */
