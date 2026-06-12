@@ -6,6 +6,8 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { ExamGenerationModule } from './exam-generation/exam-generation.module';
+import { SlideGenerationModule } from './slide-generation/slide-generation.module';
+import { SlidesModule } from './slides/slides.module';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionsModule } from './questions/questions.module';
 import { ExamsModule } from './exams/exams.module';
@@ -28,6 +30,8 @@ import { CreditsModule } from './credits/credits.module';
     UsersModule,
     AuthModule,
     ExamGenerationModule,
+    SlideGenerationModule,
+    SlidesModule,
     QuestionsModule,
     ExamsModule,
     ExamQuestionsModule,
