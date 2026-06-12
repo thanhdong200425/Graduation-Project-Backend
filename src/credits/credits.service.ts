@@ -71,6 +71,26 @@ export class CreditsService {
     return user?.creditQuota ?? settings.defaultQuota;
   }
 
+  /** Monthly credit summary for the authenticated teacher settings UI. */
+  async getTeacherSummary(userId: string) {
+    const [quota, usage, settings] = await Promise.all([
+      this.getResolvedQuota(userId),
+      this.getMonthlyUsage(userId),
+      this.getSettings(),
+    ]);
+
+    const used = Math.floor(usage.totalTokens / TOKENS_PER_CREDIT);
+    const percentUsed =
+      quota > 0 ? Math.min(100, Math.round((used / quota) * 100)) : 0;
+
+    return {
+      used,
+      quota,
+      alertThresholdPct: settings.alertThresholdPct,
+      percentUsed,
+    };
+  }
+
   /** Aggregate token/cost usage for the current calendar month (on-the-fly reset). */
   async getMonthlyUsage(userId: string): Promise<MonthlyUsage> {
     const monthStart = startOfMonth(new Date());

@@ -10,6 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { User, UserActivityAction, UserRole, UserStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
@@ -87,6 +88,38 @@ export class AuthService {
       accessToken: await this.jwtService.signAsync(payload),
       user: this.usersService.toSafeUser(user),
     };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<void> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isCurrentValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.passwordHash,
+    );
+
+    if (!isCurrentValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    if (dto.currentPassword === dto.newPassword) {
+      throw new BadRequestException(
+        'New password must be different from the current password',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.newPassword, BCRYPT_SALT_ROUNDS);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash },
+    });
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
