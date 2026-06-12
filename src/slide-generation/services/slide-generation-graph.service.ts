@@ -13,10 +13,13 @@ import type {
 } from '../../exam-generation/types/question.types';
 import { SlidePromptService } from './slide-prompt.service';
 import { SlideValidationService } from './slide-validation.service';
-import type {
-  GeneratedSlide,
-  SlideDensity,
-  SlideLanguage,
+import {
+  DEFAULT_SLIDE_LAYOUT,
+  SLIDE_LAYOUTS,
+  type GeneratedSlide,
+  type SlideDensity,
+  type SlideLanguage,
+  type SlideLayout,
 } from '../types/slide.types';
 
 export interface SlideGenerationUsage {
@@ -283,7 +286,7 @@ export class SlideGenerationGraphService {
       }
 
       const record = item as Record<string, unknown>;
-      const { title, bullets, notes } = record;
+      const { title, bullets, notes, layout } = record;
 
       if (typeof title !== 'string' || !title.trim()) {
         throw new ServiceUnavailableException(
@@ -300,7 +303,14 @@ export class SlideGenerationGraphService {
         );
       }
 
+      const normalizedLayout: SlideLayout =
+        typeof layout === 'string' &&
+        (SLIDE_LAYOUTS as readonly string[]).includes(layout)
+          ? (layout as SlideLayout)
+          : DEFAULT_SLIDE_LAYOUT;
+
       return {
+        layout: normalizedLayout,
         title: title.trim(),
         bullets: bullets.map((b) => (b as string).trim()),
         notes: typeof notes === 'string' ? notes.trim() : '',

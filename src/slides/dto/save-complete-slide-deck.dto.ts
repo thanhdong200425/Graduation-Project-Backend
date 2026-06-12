@@ -14,11 +14,16 @@ import {
 import {
   SLIDE_DENSITIES,
   SLIDE_LANGUAGES,
+  SLIDE_LAYOUTS,
   type SlideDensity,
   type SlideLanguage,
+  type SlideLayout,
 } from '../../slide-generation/types/slide.types';
 
 class SlideInputDto {
+  @IsIn(SLIDE_LAYOUTS)
+  layout!: SlideLayout;
+
   @IsString()
   @IsNotEmpty()
   title!: string;

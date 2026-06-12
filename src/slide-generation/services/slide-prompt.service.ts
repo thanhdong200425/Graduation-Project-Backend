@@ -14,6 +14,16 @@ const LANGUAGE_LABEL: Record<SlideLanguage, string> = {
   vi: 'Vietnamese',
 };
 
+/** When to use each slide layout, given to the model as guidance. */
+const LAYOUT_GUIDANCE = [
+  '- "cover": the opening title slide. Use it for the first slide.',
+  '- "agenda": an overview of the topics the lecture will cover.',
+  '- "quote": a single notable statement, law, or definition worth highlighting.',
+  '- "big-stat": a single key number, figure, or measurement worth emphasising.',
+  '- "two-column": when contrasting or pairing two related ideas.',
+  '- "bullets": the default — explaining a concept with several supporting points.',
+].join('\n');
+
 @Injectable()
 export class SlidePromptService {
   buildPrompt(params: {
@@ -37,8 +47,11 @@ export class SlidePromptService {
       `All titles, bullets, and notes must be written in ${language}.`,
       'Each bullet must be a concise phrase, not a full paragraph.',
       'Field "notes" must contain short presenter speaking notes (1-3 sentences) for that slide.',
+      'Assign each slide a "layout" chosen from: cover, agenda, bullets, two-column, quote, big-stat.',
+      'Layout guidance:',
+      LAYOUT_GUIDANCE,
       'Return ONLY valid JSON (no markdown, no backticks) as an array with this schema:',
-      '[{"title":"...","bullets":["...","..."],"notes":"..."}]',
+      '[{"layout":"cover","title":"...","bullets":["...","..."],"notes":"..."}]',
       '',
       'Context:',
       context,
