@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -43,6 +44,17 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   changePassword(@Req() req: AuthRequest, @Body() dto: ChangePasswordDto) {
     return this.authService.changePassword(req.user.id, dto);
+  }
+
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    await this.authService.forgotPassword(dto.email);
+    // Generic response so callers can't tell whether the email is registered.
+    return {
+      message:
+        'If an account exists for that email, a password reset link has been sent.',
+    };
   }
 
   @Post('reset-password')

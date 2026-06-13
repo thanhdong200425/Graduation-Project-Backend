@@ -6,16 +6,20 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { User, UserActivityAction, UserRole, UserStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 
 const BCRYPT_SALT_ROUNDS = 10;
+const RESET_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -23,6 +27,8 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -120,6 +126,42 @@ export class AuthService {
       where: { id: userId },
       data: { passwordHash },
     });
+  }
+
+  /**
+   * Self-service "forgot password" request. Always resolves without revealing
+   * whether the email belongs to a real account (prevents email enumeration);
+   * the token + email are only created/sent when a matching user exists.
+   */
+  async forgotPassword(email: string): Promise<void> {
+    const normalizedEmail = this.normalizeEmail(email);
+    const user = await this.usersService.findByEmail(normalizedEmail);
+
+    if (!user) {
+      return;
+    }
+
+    // Invalidate any outstanding reset tokens so only the newest link works.
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+    await this.prisma.passwordResetToken.create({
+      data: { token, userId: user.id, expiresAt },
+    });
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ??
+      'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+    await this.mailService.sendPasswordResetRequestEmail(
+      user.email,
+      user.name,
+      resetLink,
+    );
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {

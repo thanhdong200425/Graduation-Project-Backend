@@ -18,10 +18,43 @@ export class MailService {
     });
   }
 
+  /**
+   * Reset link triggered by an administrator from the admin panel.
+   */
   async sendPasswordResetEmail(
     to: string,
     name: string,
     resetLink: string,
+  ): Promise<void> {
+    await this.sendResetEmail(
+      to,
+      name,
+      resetLink,
+      'An administrator has requested a password reset for your account. Click the button below to set a new password.',
+    );
+  }
+
+  /**
+   * Reset link triggered by the user themselves via the "Forgot password" flow.
+   */
+  async sendPasswordResetRequestEmail(
+    to: string,
+    name: string,
+    resetLink: string,
+  ): Promise<void> {
+    await this.sendResetEmail(
+      to,
+      name,
+      resetLink,
+      'We received a request to reset the password for your account. Click the button below to set a new password.',
+    );
+  }
+
+  private async sendResetEmail(
+    to: string,
+    name: string,
+    resetLink: string,
+    intro: string,
   ): Promise<void> {
     const from =
       this.config.get<string>('SMTP_FROM') ??
@@ -35,7 +68,7 @@ export class MailService {
           <h2 style="font-size:20px;font-weight:700;color:#111218;margin:0 0 8px">Password Reset</h2>
           <p style="font-size:14px;color:#5C5E64;margin:0 0 24px">Hi ${name},</p>
           <p style="font-size:14px;color:#5C5E64;margin:0 0 24px">
-            An administrator has requested a password reset for your account. Click the button below to set a new password.
+            ${intro}
             This link will expire in <strong>24 hours</strong>.
           </p>
           <a href="${resetLink}"
