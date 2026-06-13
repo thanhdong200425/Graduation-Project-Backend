@@ -4,12 +4,14 @@ import {
   Delete,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CreateExamQuestionDto } from './dto/create-exam-question.dto';
+import { ReorderExamQuestionsDto } from './dto/reorder-exam-questions.dto';
 import { ExamItemsService } from './exam-questions.service';
 
 @UseGuards(JwtAuthGuard)
@@ -30,6 +32,12 @@ export class ExamQuestionsController {
   @Get()
   async findByExam(@Query('examId') examId: string) {
     return this.examQuestionsService.findByExam(examId);
+  }
+
+  @Patch('reorder')
+  async reorder(@Body() reorderDto: ReorderExamQuestionsDto) {
+    const { examId, orderedItemIds } = reorderDto;
+    return this.examQuestionsService.reorder(examId, orderedItemIds);
   }
 
   @Delete(':id')

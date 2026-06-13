@@ -10,7 +10,7 @@ import { DifficultyLevel, QuestionStatus } from '@prisma/client';
 export class CreateQuestionDto {
   @IsUUID()
   @IsNotEmpty()
-  chapterId: string;
+  chapterId!: string;
 
   @IsUUID()
   @IsOptional()
@@ -18,31 +18,35 @@ export class CreateQuestionDto {
 
   @IsString()
   @IsNotEmpty()
-  question: string;
+  question!: string;
 
   @IsString()
   @IsNotEmpty()
-  optionA: string;
+  optionA!: string;
 
   @IsString()
   @IsNotEmpty()
-  optionB: string;
+  optionB!: string;
 
   @IsString()
   @IsNotEmpty()
-  optionC: string;
+  optionC!: string;
 
   @IsString()
   @IsNotEmpty()
-  optionD: string;
+  optionD!: string;
 
   @IsString()
   @IsNotEmpty()
-  correctAnswer: string;
+  correctAnswer!: string;
 
   @IsEnum(DifficultyLevel)
   @IsNotEmpty()
-  difficulty: DifficultyLevel;
+  difficulty!: DifficultyLevel;
+
+  @IsString()
+  @IsOptional()
+  explanation?: string;
 
   @IsString()
   @IsOptional()

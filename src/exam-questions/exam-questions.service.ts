@@ -42,4 +42,20 @@ export class ExamItemsService {
       where: { examId },
     });
   }
+
+  /**
+   * Persist a new question order for an exam by writing each ExamItem's
+   * `orderIndex` to match its position in `orderedItemIds`.
+   */
+  async reorder(examId: string, orderedItemIds: string[]): Promise<ExamItem[]> {
+    await this.prisma.$transaction(
+      orderedItemIds.map((id, index) =>
+        this.prisma.examItem.update({
+          where: { id },
+          data: { orderIndex: index },
+        }),
+      ),
+    );
+    return this.findByExam(examId);
+  }
 }

@@ -21,12 +21,11 @@ export class QuestionsController {
 
   @Post()
   async create(@Body() createQuestionDto: CreateQuestionDto) {
-    // We map the DTO to Prisma input.
-    // Note: In a real app, you might want more complex mapping if needed.
-    const { chapterId, chunkId, ...rest } = createQuestionDto;
+    // Map the DTO `question` field to the Prisma `name` column.
+    const { chapterId, chunkId, question, ...rest } = createQuestionDto;
     return this.questionsService.create({
       ...rest,
-      name: rest.question,
+      name: question,
       chapter: { connect: { id: chapterId } },
       ...(chunkId ? { chunk: { connect: { id: chunkId } } } : {}),
     });
@@ -50,9 +49,10 @@ export class QuestionsController {
     @Param('id') id: string,
     @Body() updateQuestionDto: UpdateQuestionDto,
   ) {
-    const { chapterId, chunkId, ...rest } = updateQuestionDto;
+    const { chapterId, chunkId, question, ...rest } = updateQuestionDto;
     return this.questionsService.update(id, {
       ...rest,
+      ...(question !== undefined ? { name: question } : {}),
       ...(chapterId ? { chapter: { connect: { id: chapterId } } } : {}),
       ...(chunkId ? { chunk: { connect: { id: chunkId } } } : {}),
     });
