@@ -6,6 +6,8 @@ import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { ExamGenerationModule } from './exam-generation/exam-generation.module';
+import { SlideGenerationModule } from './slide-generation/slide-generation.module';
+import { SlidesModule } from './slides/slides.module';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionsModule } from './questions/questions.module';
 import { ExamsModule } from './exams/exams.module';
@@ -20,6 +22,8 @@ import { StudentAnalyticsModule } from './student-analytics/student-analytics.mo
 import { AdminModule } from './admin/admin.module';
 import { MailModule } from './mail/mail.module';
 import { CreditsModule } from './credits/credits.module';
+import { TeacherActivityModule } from './teacher-activity/teacher-activity.module';
+import { TeacherCreditsModule } from './teacher-credits/teacher-credits.module';
 
 @Module({
   imports: [
@@ -28,6 +32,8 @@ import { CreditsModule } from './credits/credits.module';
     UsersModule,
     AuthModule,
     ExamGenerationModule,
+    SlideGenerationModule,
+    SlidesModule,
     QuestionsModule,
     ExamsModule,
     ExamQuestionsModule,
@@ -41,6 +47,8 @@ import { CreditsModule } from './credits/credits.module';
     StudentAnalyticsModule,
     AdminModule,
     CreditsModule,
+    TeacherActivityModule,
+    TeacherCreditsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

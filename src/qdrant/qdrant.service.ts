@@ -111,6 +111,15 @@ export class QdrantService implements OnModuleInit {
     }
   }
 
+  async ping(): Promise<boolean> {
+    try {
+      await this.client.getCollections();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async deleteVectorsByUploadId(pdfUploadId: string): Promise<void> {
     await this.client.delete(this.collectionName, {
       filter: {

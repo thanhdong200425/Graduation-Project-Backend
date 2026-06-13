@@ -39,6 +39,7 @@ model User {
   passwordResetTokens  PasswordResetToken[]
   tokenUsageLogs       TokenUsageLog[]
   generationJobs       GenerationJob[]
+  slideDecks           SlideDeck[]
 }
 
 model UserActivity {
@@ -103,6 +104,7 @@ model Subject {
   updatedAt   DateTime  @updatedAt
   chapters    Chapter[]
   exams       Exam[]
+  slideDecks  SlideDeck[]
 
   @@map("subjects")
 }
@@ -120,6 +122,7 @@ model Chapter {
   questions      Question[]
   textbookChunks TextbookChunk[]
   pdfUploads     PdfUpload[]
+  slideDecks     SlideDeck[]
 
   @@index([subjectId])
   @@map("chapters")
@@ -304,6 +307,33 @@ model CreditSetting {
   updatedAt         DateTime @updatedAt
 
   @@map("credit_settings")
+}
+
+model SlideDeck {
+  /// A saved slide deck generated from uploaded sources.
+  ///
+  /// Slides are stored inline as a JSON array (each: title, bullets, notes);
+  /// they aren't reused across decks the way questions are, so no child table.
+  /// Scoped per-teacher via `userId`.
+  id        String   @id @default(uuid())
+  userId    String
+  subjectId String?
+  chapterId String?
+  title     String
+  numSlides Int
+  density   String
+  language  String
+  slides    Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  chapter   Chapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([chapterId])
+  @@map("slide_decks")
 }
 
 enum GenerationStatus {
