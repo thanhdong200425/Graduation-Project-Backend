@@ -17,6 +17,7 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { GoogleProfile } from './interfaces/google-profile.interface';
 
 const BCRYPT_SALT_ROUNDS = 10;
 const RESET_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
@@ -51,7 +52,9 @@ export class AuthService {
       role: registerDto.role ?? UserRole.TEACHER,
     });
 
-    await this.prisma.userActivity.create({ data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT } });
+    await this.prisma.userActivity.create({
+      data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT },
+    });
     return this.buildAuthResponse(user);
   }
 
@@ -60,6 +63,12 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!user.passwordHash) {
+      // Account was created via Google sign-in and has no password set. Keep
+      // the message generic so we don't reveal how the account was registered.
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -80,8 +89,57 @@ export class AuthService {
       throw new ForbiddenException('ACCOUNT_SUSPENDED');
     }
 
-    await this.prisma.userActivity.create({ data: { userId: user.id, action: UserActivityAction.LOGIN } });
+    await this.prisma.userActivity.create({
+      data: { userId: user.id, action: UserActivityAction.LOGIN },
+    });
     return this.buildAuthResponse(user);
+  }
+
+  /**
+   * Find-or-create a user from a verified Google profile, then issue a JWT.
+   * - Existing email → log in, attaching the Google identity on first use
+   *   (auto-link). Suspended accounts are rejected.
+   * - New email → create the account with the role carried from the portal tab.
+   */
+  async loginWithGoogle(profile: GoogleProfile, requestedRole?: string) {
+    const email = this.normalizeEmail(profile.email);
+    let user = await this.usersService.findByEmail(email);
+
+    if (user) {
+      if (user.status === UserStatus.SUSPENDED) {
+        throw new ForbiddenException('ACCOUNT_SUSPENDED');
+      }
+
+      if (!user.googleId) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId: profile.googleId,
+            avatarUrl: user.avatarUrl ?? profile.avatarUrl,
+          },
+        });
+      }
+    } else {
+      user = await this.usersService.create({
+        email,
+        name: profile.name,
+        role: this.resolveRole(requestedRole),
+        googleId: profile.googleId,
+        avatarUrl: profile.avatarUrl,
+      });
+      await this.prisma.userActivity.create({
+        data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT },
+      });
+    }
+
+    await this.prisma.userActivity.create({
+      data: { userId: user.id, action: UserActivityAction.LOGIN },
+    });
+    return this.buildAuthResponse(user);
+  }
+
+  private resolveRole(value?: string): UserRole {
+    return value === UserRole.STUDENT ? UserRole.STUDENT : UserRole.TEACHER;
   }
 
   private async buildAuthResponse(user: User) {
@@ -103,6 +161,12 @@ export class AuthService {
 
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'No password is set for this account. Use "Forgot password" to create one.',
+      );
     }
 
     const isCurrentValid = await bcrypt.compare(
@@ -154,8 +218,7 @@ export class AuthService {
     });
 
     const frontendUrl =
-      this.configService.get<string>('FRONTEND_URL') ??
-      'http://localhost:5173';
+      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
     const resetLink = `${frontendUrl}/reset-password?token=${token}`;
     await this.mailService.sendPasswordResetRequestEmail(
       user.email,
