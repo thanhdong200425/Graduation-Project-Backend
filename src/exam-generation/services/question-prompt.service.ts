@@ -105,6 +105,7 @@ export class QuestionPromptService {
     return [
       'You are an exam question generator.',
       `Generate exactly ${params.numQuestions} multiple-choice questions based on the provided context.`,
+      `Distribute difficulty exactly as: ${params.difficultyCounts.easy} easy, ${params.difficultyCounts.medium} medium, and ${params.difficultyCounts.hard} hard.`,
       ...(focus
         ? [
             `Prioritise the following teacher focus when choosing what to ask about: "${focus}". Stay within the provided context.`,
@@ -116,9 +117,11 @@ export class QuestionPromptService {
       'Randomize the position of the correct answer across the 4 options — do not always place it at the same position (A, B, C, or D).',
       'Field "answer" must be a short direct answer or key explanation in Vietnamese — not the text of a choice.',
       'Field "correctOptions" must be a JSON array with exactly one string: the correct choice copied verbatim from "options".',
+      'Difficulty levels: "easy" = recall of a single fact or definition; "medium" = applying, comparing, or interpreting a concept; "hard" = multi-step reasoning or synthesising several concepts.',
+      'Tag every question with a "difficulty" field whose value is exactly "easy", "medium", or "hard", matching the distribution above.',
       'All questions, options, and answers must be written in Vietnamese.',
       'Return ONLY valid JSON (no markdown, no backticks) as an array with this schema:',
-      '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."]}]',
+      '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."],"difficulty":"easy|medium|hard"}]',
       '',
       'Context:',
       context,

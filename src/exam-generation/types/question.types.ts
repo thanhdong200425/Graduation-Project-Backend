@@ -23,6 +23,15 @@ export interface GeneratedQuestion {
   answer: string;
   /** Verbatim text of each correct choice; for standard MCQ exactly one string matching an entry in `options`. */
   correctOptions: string[];
+  /** Final difficulty used for the exam (reconciled from the LLM label and PhoBERT). */
+  difficulty: DifficultyLevel;
+  /** PhoBERT's raw classification, kept for comparison against the final difficulty. */
+  predictedDifficulty?: DifficultyLevel;
+}
+
+/** A single question's difficulty as returned by the PhoBERT classifier. */
+export interface ClassifiedDifficulty {
+  id: string;
   difficulty: DifficultyLevel;
 }
 

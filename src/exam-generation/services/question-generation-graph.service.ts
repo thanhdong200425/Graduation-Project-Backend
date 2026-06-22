@@ -10,13 +10,14 @@ import { ChapterRetrievalService } from './chapter-retrieval.service';
 import { QuestionPromptService } from './question-prompt.service';
 import {
   ChunkScore,
+  ClassifiedDifficulty,
   DifficultyCounts,
   DifficultyDistribution,
-  DifficultyLevel,
   GeneratedQuestion,
   RetrievedChunk,
 } from '../types/question.types';
 import { QuestionValidationService } from './question-validation.service';
+import { DifficultyReconciliationService } from './difficulty-reconciliation.service';
 
 export interface QuestionGenerationUsage {
   promptTokens: number;
@@ -35,6 +36,7 @@ const QuestionGenerationState = Annotation.Root({
   query: Annotation<string>,
   focus: Annotation<string>,
   chunksScore: Annotation<ChunkScore[]>,
+  classifiedDifficulties: Annotation<ClassifiedDifficulty[]>,
   usage: Annotation<QuestionGenerationUsage>,
 });
 
@@ -50,6 +52,7 @@ export class QuestionGenerationGraphService {
     private readonly questionPromptService: QuestionPromptService,
     private readonly configService: ConfigService,
     private readonly questionValidationService: QuestionValidationService,
+    private readonly difficultyReconciliationService: DifficultyReconciliationService,
   ) {
     const { llm, provider } = createQuestionLlm(configService);
     this.llm = llm;
@@ -259,19 +262,28 @@ export class QuestionGenerationGraphService {
         const data = this.extractDifficultyResults(
           (await response.json()) as unknown,
         );
-        console.log({ data });
         if (!data) {
           throw new ServiceUnavailableException(
             'The difficulty classifier returned an invalid response.',
           );
         }
 
-        const questions = state.questions.map((q, i) => ({
-          ...q,
-          difficulty: (data.find((r) => r.id === String(i))?.difficulty ??
-            'medium') as DifficultyLevel,
-        }));
-
+        // Keep PhoBERT's labels in their own state slot. We deliberately do NOT
+        // overwrite the LLM-generated difficulties here — the reconcile step
+        // decides which source wins.
+        await report(90);
+        return { classifiedDifficulties: data };
+      })
+      .addNode('reconcileDifficulty', async (state) => {
+        // If PhoBERT's distribution matches the request, trust its labels;
+        // otherwise fall back to the LLM's labels so the exam keeps the
+        // requested distribution. PhoBERT's raw prediction is preserved either
+        // way (see DifficultyReconciliationService).
+        const questions = this.difficultyReconciliationService.reconcile({
+          llmQuestions: state.questions,
+          classified: state.classifiedDifficulties ?? [],
+          targetCounts: difficultyCounts,
+        });
         await report(95);
         return { questions };
       })
@@ -281,7 +293,8 @@ export class QuestionGenerationGraphService {
       .addEdge('gradeChunks', 'buildPrompt')
       .addEdge('buildPrompt', 'generateQuestions')
       .addEdge('generateQuestions', 'classifyDifficulty')
-      .addEdge('classifyDifficulty', '__end__')
+      .addEdge('classifyDifficulty', 'reconcileDifficulty')
+      .addEdge('reconcileDifficulty', '__end__')
       .compile();
 
     const result = await graph.invoke({
@@ -296,6 +309,7 @@ export class QuestionGenerationGraphService {
       query: '',
       focus: input.focus ?? '',
       chunksScore: [],
+      classifiedDifficulties: [],
       usage: { promptTokens: 0, completionTokens: 0 },
     });
 
@@ -308,7 +322,7 @@ export class QuestionGenerationGraphService {
 
   private extractDifficultyResults(
     payload: unknown,
-  ): Array<{ id: string; difficulty: string }> | null {
+  ): ClassifiedDifficulty[] | null {
     if (
       typeof payload !== 'object' ||
       payload === null ||
@@ -325,8 +339,11 @@ export class QuestionGenerationGraphService {
     ).results;
 
     return results.filter(
-      (item): item is { id: string; difficulty: string } =>
-        typeof item.id === 'string' && typeof item.difficulty === 'string',
+      (item): item is ClassifiedDifficulty =>
+        typeof item.id === 'string' &&
+        (item.difficulty === 'easy' ||
+          item.difficulty === 'medium' ||
+          item.difficulty === 'hard'),
     );
   }
 
@@ -392,6 +409,7 @@ export class QuestionGenerationGraphService {
         options,
         answer,
         correctOptions: correctOptionsRaw,
+        difficulty,
       } = record;
 
       if (typeof question !== 'string' || !question.trim()) {
@@ -434,13 +452,22 @@ export class QuestionGenerationGraphService {
           'Each correctOptions entry must match one option verbatim.',
         );
       }
+      if (
+        difficulty !== 'easy' &&
+        difficulty !== 'medium' &&
+        difficulty !== 'hard'
+      ) {
+        throw new ServiceUnavailableException(
+          'Each question must include a difficulty of "easy", "medium", or "hard".',
+        );
+      }
 
       return {
         question,
         options: options as [string, string, string, string],
         answer: answer.trim(),
         correctOptions: [correctOption],
-        difficulty: 'easy' as DifficultyLevel,
+        difficulty,
       } as GeneratedQuestion;
     });
 

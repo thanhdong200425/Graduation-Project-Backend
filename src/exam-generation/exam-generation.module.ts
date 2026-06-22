@@ -6,6 +6,7 @@ import { QuestionGenerationGraphService } from './services/question-generation-g
 import { QuestionPromptService } from './services/question-prompt.service';
 import { ConfigModule } from '@nestjs/config';
 import { QuestionValidationService } from './services/question-validation.service';
+import { DifficultyReconciliationService } from './services/difficulty-reconciliation.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { CreditsModule } from '../credits/credits.module';
 
@@ -18,6 +19,7 @@ import { CreditsModule } from '../credits/credits.module';
     QuestionPromptService,
     QuestionGenerationGraphService,
     QuestionValidationService,
+    DifficultyReconciliationService,
   ],
 })
 export class ExamGenerationModule {}
