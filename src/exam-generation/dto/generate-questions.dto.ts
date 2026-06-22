@@ -5,8 +5,10 @@ import {
   IsInt,
   IsNumber,
   IsObject,
+  IsOptional,
   IsPositive,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -36,6 +38,17 @@ export class GenerateQuestionsDto {
   @ValidateNested()
   @Type(() => DifficultyDistributionDto)
   difficultyDist!: DifficultyDistributionDto;
+
+  /**
+   * Optional teacher-supplied focus describing what the exam should cover
+   * (e.g. "sorting algorithms, recursion, time complexity"). When present it
+   * becomes the semantic retrieval + rerank query and steers generation;
+   * when empty, the pipeline falls back to a generic query.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
+  focus?: string;
 }
 
 export { DifficultyDistributionDto };

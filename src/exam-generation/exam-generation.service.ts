@@ -54,6 +54,7 @@ export class ExamGenerationService {
             uploadIds: dto.uploadIds,
             numQuestions: dto.numQuestions,
             difficultyDist: dto.difficultyDist,
+            focus: dto.focus,
           },
           {
             onProgress: async (progress: number) => {

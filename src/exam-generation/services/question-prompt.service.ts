@@ -94,23 +94,34 @@ export class QuestionPromptService {
     difficultyCounts: DifficultyCounts;
     subjectCode?: string;
     chapterNo?: number;
+    focus?: string;
   }): string {
     const context = params.chunks
       .map((chunk, index) => `Chunk ${index + 1}:\n${chunk.content}`)
       .join('\n\n');
 
+    const focus = params.focus?.trim();
+
     return [
       'You are an exam question generator.',
       `Generate exactly ${params.numQuestions} multiple-choice questions based on the provided context.`,
+      `Distribute difficulty exactly as: ${params.difficultyCounts.easy} easy, ${params.difficultyCounts.medium} medium, and ${params.difficultyCounts.hard} hard.`,
+      ...(focus
+        ? [
+            `Prioritise the following teacher focus when choosing what to ask about: "${focus}". Stay within the provided context.`,
+          ]
+        : []),
       'Use only the concepts and facts from the provided context. Do not invent facts not present in context.',
       'When the context contains numerical values, you MAY vary those numbers to create distinct questions — always adjust the correct answer to match the changed values.',
       'Each question must have exactly 4 options in an array and exactly 1 correct option.',
       'Randomize the position of the correct answer across the 4 options — do not always place it at the same position (A, B, C, or D).',
       'Field "answer" must be a short direct answer or key explanation in Vietnamese — not the text of a choice.',
       'Field "correctOptions" must be a JSON array with exactly one string: the correct choice copied verbatim from "options".',
+      'Difficulty levels: "easy" = recall of a single fact or definition; "medium" = applying, comparing, or interpreting a concept; "hard" = multi-step reasoning or synthesising several concepts.',
+      'Tag every question with a "difficulty" field whose value is exactly "easy", "medium", or "hard", matching the distribution above.',
       'All questions, options, and answers must be written in Vietnamese.',
       'Return ONLY valid JSON (no markdown, no backticks) as an array with this schema:',
-      '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."]}]',
+      '[{"question":"...","options":["A","B","C","D"],"answer":"...","correctOptions":["..."],"difficulty":"easy|medium|hard"}]',
       '',
       'Context:',
       context,
