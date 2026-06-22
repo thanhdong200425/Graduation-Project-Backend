@@ -6,16 +6,21 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { User, UserActivityAction, UserRole, UserStatus } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../mail/mail.service';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
+import { GoogleProfile } from './interfaces/google-profile.interface';
 
 const BCRYPT_SALT_ROUNDS = 10;
+const RESET_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 @Injectable()
 export class AuthService {
@@ -23,6 +28,8 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly prisma: PrismaService,
+    private readonly mailService: MailService,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(registerDto: RegisterDto) {
@@ -45,7 +52,9 @@ export class AuthService {
       role: registerDto.role ?? UserRole.TEACHER,
     });
 
-    await this.prisma.userActivity.create({ data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT } });
+    await this.prisma.userActivity.create({
+      data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT },
+    });
     return this.buildAuthResponse(user);
   }
 
@@ -54,6 +63,12 @@ export class AuthService {
     const user = await this.usersService.findByEmail(email);
 
     if (!user) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!user.passwordHash) {
+      // Account was created via Google sign-in and has no password set. Keep
+      // the message generic so we don't reveal how the account was registered.
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -74,8 +89,57 @@ export class AuthService {
       throw new ForbiddenException('ACCOUNT_SUSPENDED');
     }
 
-    await this.prisma.userActivity.create({ data: { userId: user.id, action: UserActivityAction.LOGIN } });
+    await this.prisma.userActivity.create({
+      data: { userId: user.id, action: UserActivityAction.LOGIN },
+    });
     return this.buildAuthResponse(user);
+  }
+
+  /**
+   * Find-or-create a user from a verified Google profile, then issue a JWT.
+   * - Existing email → log in, attaching the Google identity on first use
+   *   (auto-link). Suspended accounts are rejected.
+   * - New email → create the account with the role carried from the portal tab.
+   */
+  async loginWithGoogle(profile: GoogleProfile, requestedRole?: string) {
+    const email = this.normalizeEmail(profile.email);
+    let user = await this.usersService.findByEmail(email);
+
+    if (user) {
+      if (user.status === UserStatus.SUSPENDED) {
+        throw new ForbiddenException('ACCOUNT_SUSPENDED');
+      }
+
+      if (!user.googleId) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId: profile.googleId,
+            avatarUrl: user.avatarUrl ?? profile.avatarUrl,
+          },
+        });
+      }
+    } else {
+      user = await this.usersService.create({
+        email,
+        name: profile.name,
+        role: this.resolveRole(requestedRole),
+        googleId: profile.googleId,
+        avatarUrl: profile.avatarUrl,
+      });
+      await this.prisma.userActivity.create({
+        data: { userId: user.id, action: UserActivityAction.CREATE_ACCOUNT },
+      });
+    }
+
+    await this.prisma.userActivity.create({
+      data: { userId: user.id, action: UserActivityAction.LOGIN },
+    });
+    return this.buildAuthResponse(user);
+  }
+
+  private resolveRole(value?: string): UserRole {
+    return value === UserRole.STUDENT ? UserRole.STUDENT : UserRole.TEACHER;
   }
 
   private async buildAuthResponse(user: User) {
@@ -99,6 +163,12 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
 
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'No password is set for this account. Use "Forgot password" to create one.',
+      );
+    }
+
     const isCurrentValid = await bcrypt.compare(
       dto.currentPassword,
       user.passwordHash,
@@ -120,6 +190,41 @@ export class AuthService {
       where: { id: userId },
       data: { passwordHash },
     });
+  }
+
+  /**
+   * Self-service "forgot password" request. Always resolves without revealing
+   * whether the email belongs to a real account (prevents email enumeration);
+   * the token + email are only created/sent when a matching user exists.
+   */
+  async forgotPassword(email: string): Promise<void> {
+    const normalizedEmail = this.normalizeEmail(email);
+    const user = await this.usersService.findByEmail(normalizedEmail);
+
+    if (!user) {
+      return;
+    }
+
+    // Invalidate any outstanding reset tokens so only the newest link works.
+    await this.prisma.passwordResetToken.updateMany({
+      where: { userId: user.id, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+    await this.prisma.passwordResetToken.create({
+      data: { token, userId: user.id, expiresAt },
+    });
+
+    const frontendUrl =
+      this.configService.get<string>('FRONTEND_URL') ?? 'http://localhost:5173';
+    const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+    await this.mailService.sendPasswordResetRequestEmail(
+      user.email,
+      user.name,
+      resetLink,
+    );
   }
 
   async resetPassword(token: string, newPassword: string): Promise<void> {
