@@ -33,6 +33,7 @@ const QuestionGenerationState = Annotation.Root({
   rawModelOutput: Annotation<string>,
   questions: Annotation<GeneratedQuestion[]>,
   query: Annotation<string>,
+  focus: Annotation<string>,
   chunksScore: Annotation<ChunkScore[]>,
   usage: Annotation<QuestionGenerationUsage>,
 });
@@ -67,6 +68,7 @@ export class QuestionGenerationGraphService {
       uploadIds: string[];
       numQuestions: number;
       difficultyDist: DifficultyDistribution;
+      focus?: string;
     },
     options?: {
       onProgress?: (progress: number) => Promise<void>;
@@ -91,9 +93,15 @@ export class QuestionGenerationGraphService {
       );
 
     const graph = new StateGraph(QuestionGenerationState)
-      .addNode('buildQuery', async () => {
+      .addNode('buildQuery', async (state) => {
+        // A teacher-supplied focus is the strongest relevance signal we have:
+        // it drives both the Qdrant vector search and the cross-encoder rerank.
+        // Fall back to a generic query when the teacher leaves it blank.
+        const focus = state.focus?.trim();
         const query =
-          'key concepts, definitions, theories, and important facts suitable for academic exam questions';
+          focus && focus.length > 0
+            ? focus
+            : 'key concepts, definitions, theories, and important facts suitable for academic exam questions';
         await report(10);
         return { query };
       })
@@ -153,6 +161,7 @@ export class QuestionGenerationGraphService {
           chunks: state.chunks ?? [],
           numQuestions: state.numQuestions,
           difficultyCounts: state.difficultyCounts,
+          focus: state.focus,
         });
         await report(60);
         return { prompt };
@@ -285,6 +294,7 @@ export class QuestionGenerationGraphService {
       rawModelOutput: '',
       questions: [],
       query: '',
+      focus: input.focus ?? '',
       chunksScore: [],
       usage: { promptTokens: 0, completionTokens: 0 },
     });

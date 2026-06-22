@@ -94,14 +94,22 @@ export class QuestionPromptService {
     difficultyCounts: DifficultyCounts;
     subjectCode?: string;
     chapterNo?: number;
+    focus?: string;
   }): string {
     const context = params.chunks
       .map((chunk, index) => `Chunk ${index + 1}:\n${chunk.content}`)
       .join('\n\n');
 
+    const focus = params.focus?.trim();
+
     return [
       'You are an exam question generator.',
       `Generate exactly ${params.numQuestions} multiple-choice questions based on the provided context.`,
+      ...(focus
+        ? [
+            `Prioritise the following teacher focus when choosing what to ask about: "${focus}". Stay within the provided context.`,
+          ]
+        : []),
       'Use only the concepts and facts from the provided context. Do not invent facts not present in context.',
       'When the context contains numerical values, you MAY vary those numbers to create distinct questions — always adjust the correct answer to match the changed values.',
       'Each question must have exactly 4 options in an array and exactly 1 correct option.',
