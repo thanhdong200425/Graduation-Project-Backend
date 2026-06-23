@@ -1,11 +1,14 @@
 import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 import { ExamSessionsService } from './exam-sessions.service';
 import { CreateExamSessionDto } from './dto/create-exam-session.dto';
 import { SubmitExamDto } from './dto/submit-exam.dto';
 import type { AuthRequest } from '../auth/interfaces/auth-request.interface';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('exam-sessions')
 export class ExamSessionsController {
   constructor(private readonly examSessionsService: ExamSessionsService) {}
@@ -47,6 +50,7 @@ export class ExamSessionsController {
   }
 
   @Post(':id/start')
+  @Roles(UserRole.STUDENT)
   async start(
     @Param('id') id: string,
     @Req() req: AuthRequest,
@@ -55,6 +59,7 @@ export class ExamSessionsController {
   }
 
   @Post(':id/submit')
+  @Roles(UserRole.STUDENT)
   async submit(
     @Param('id') id: string,
     @Body() submitDto: SubmitExamDto,
