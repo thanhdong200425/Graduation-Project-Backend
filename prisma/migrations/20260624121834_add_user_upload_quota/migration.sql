@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "uploadQuota" INTEGER NOT NULL DEFAULT 10;
