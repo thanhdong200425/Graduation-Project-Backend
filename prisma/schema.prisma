@@ -29,6 +29,7 @@ model User {
   role         UserRole    @default(TEACHER)
   status       UserStatus  @default(ACTIVE)
   creditQuota  Int?
+  uploadQuota  Int         @default(10)
   googleId     String?     @unique
   avatarUrl    String?
   createdAt    DateTime    @default(now())

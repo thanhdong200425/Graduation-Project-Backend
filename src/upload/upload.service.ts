@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
 } from '@nestjs/common';
+import { UploadQuotaExceededException } from './upload.exceptions';
 import { PdfUpload } from '@prisma/client';
 import { createHash } from 'crypto';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
@@ -45,6 +46,14 @@ export class UploadService {
         );
       }
     } else {
+      // Enforce the per-user upload quota only when a brand-new record would be
+      // created (dedup hits below never consume a new slot). Only non-FAILED
+      // uploads count toward the limit.
+      const { limit, used } = await this.getUploadQuota(uploadedById);
+      if (used >= limit) {
+        throw new UploadQuotaExceededException(limit);
+      }
+
       if (!existsSync(UPLOAD_DIR)) {
         mkdirSync(UPLOAD_DIR, { recursive: true });
       }
@@ -94,6 +103,27 @@ export class UploadService {
     this.pdfPipeline.processSelectedPages(uploadId, selectedPages).catch((error) => {
       console.error(`Error processing selected pages for ${uploadId}:`, error);
     });
+  }
+
+  /**
+   * Per-user upload quota usage. `used` counts only non-FAILED uploads, so
+   * deleting a file (or a failed upload) frees a slot.
+   */
+  async getUploadQuota(
+    userId: string,
+  ): Promise<{ limit: number; used: number; remaining: number }> {
+    const [user, used] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { uploadQuota: true },
+      }),
+      this.prisma.pdfUpload.count({
+        where: { uploadedById: userId, status: { not: 'FAILED' } },
+      }),
+    ]);
+
+    const limit = user.uploadQuota;
+    return { limit, used, remaining: Math.max(0, limit - used) };
   }
 
   async findAllByUser(userId: string): Promise<PdfUpload[]> {

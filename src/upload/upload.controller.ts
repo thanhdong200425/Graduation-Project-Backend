@@ -23,7 +23,7 @@ import type { PdfUploadResponseDto } from './upload.dto';
 import { ProcessTextBodyDto, UploadPdfBodyDto } from './upload.dto';
 import { UploadService } from './upload.service';
 
-const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50 MB
+const MAX_PDF_SIZE = 10 * 1024 * 1024; // 10 MB
 
 @Controller('pdf-upload')
 @UseGuards(JwtAuthGuard)
@@ -77,6 +77,16 @@ export class UploadController {
   ): Promise<{ message: string }> {
     await this.uploadService.processSelectedPages(id, body.selectedPages);
     return { message: 'Processing started. Poll /status for progress.' };
+  }
+
+  /**
+   * GET /pdf-upload/quota
+   * Trả về hạn mức upload của user: tổng giới hạn, số đã dùng, còn lại.
+   * Frontend dùng để hiển thị "x / N" và chặn upload khi đã đầy.
+   */
+  @Get('quota')
+  async getQuota(@Req() req: AuthRequest) {
+    return this.uploadService.getUploadQuota(req.user.id);
   }
 
   @Get('/')
