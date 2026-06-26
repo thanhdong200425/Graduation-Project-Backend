@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -42,6 +42,19 @@ export class ExamSessionsController {
     @Req() req: AuthRequest,
   ) {
     return this.examSessionsService.getSessionAnalytics(id, req.user.id);
+  }
+
+  @Get('by-exam/:examId')
+  async getByExamId(
+    @Param('examId') examId: string,
+    @Req() req: AuthRequest,
+  ) {
+    return this.examSessionsService.findByExamId(examId, req.user.id);
+  }
+
+  @Patch(':id/close')
+  async close(@Param('id') id: string, @Req() req: AuthRequest) {
+    return this.examSessionsService.close(id, req.user.id);
   }
 
   @Get('code/:code')
