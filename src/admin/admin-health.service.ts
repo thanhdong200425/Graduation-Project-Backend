@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../prisma/prisma.service';
 import { QdrantService } from '../qdrant/qdrant.service';
 import type {
   AdminHealthResponseDto,
@@ -12,32 +11,20 @@ export class AdminHealthService {
   private readonly logger = new Logger(AdminHealthService.name);
 
   constructor(
-    private readonly prisma: PrismaService,
     private readonly qdrantService: QdrantService,
     private readonly configService: ConfigService,
   ) {}
 
   async getStatus(): Promise<AdminHealthResponseDto> {
-    const [postgresql, qdrant, pipeline] = await Promise.all([
-      this.checkPostgresql(),
+    const [qdrant, pipeline] = await Promise.all([
       this.checkQdrant(),
       this.checkPipeline(),
     ]);
 
     return {
       checkedAt: new Date().toISOString(),
-      services: { postgresql, qdrant, pipeline },
+      services: { qdrant, pipeline },
     };
-  }
-
-  private async checkPostgresql(): Promise<ServiceHealthStatus> {
-    try {
-      await this.prisma.$queryRaw`SELECT 1`;
-      return 'ok';
-    } catch (error) {
-      this.logger.warn('PostgreSQL health check failed', error);
-      return 'down';
-    }
   }
 
   private async checkQdrant(): Promise<ServiceHealthStatus> {

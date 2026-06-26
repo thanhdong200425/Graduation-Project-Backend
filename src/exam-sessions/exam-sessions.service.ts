@@ -1,4 +1,10 @@
-import { Injectable, ConflictException, NotFoundException, GoneException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+  GoneException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExamSessionDto } from './dto/create-exam-session.dto';
 import { SubmitExamDto } from './dto/submit-exam.dto';
@@ -25,7 +31,9 @@ type SubmissionWithScore = {
 
 function computeSubmissionStats(submissions: SubmissionWithScore[]) {
   const startedCount = submissions.length;
-  const submitted = submissions.filter((s) => s.submittedAt != null && s.score != null);
+  const submitted = submissions.filter(
+    (s) => s.submittedAt != null && s.score != null,
+  );
   const submittedCount = submitted.length;
   const scores = submitted.map((s) => s.score as number);
 
@@ -95,10 +103,7 @@ function bucketSparkline(
     (min, d) => (d.getTime() < min ? d.getTime() : min),
     dates[0].getTime(),
   );
-  const spanDays = Math.max(
-    1,
-    Math.ceil((now.getTime() - oldest) / dayMs),
-  );
+  const spanDays = Math.max(1, Math.ceil((now.getTime() - oldest) / dayMs));
   const bucketDays = Math.max(1, Math.ceil(spanDays / bucketCount));
 
   return Array.from({ length: bucketCount }, (_, i) => {
@@ -125,7 +130,10 @@ function computeDelta(
   return { delta: `${diff} this period`, deltaDir: 'down' };
 }
 
-function formatActivityAxisLabel(date: Date, range: '7d' | '30d' | '90d'): string {
+function formatActivityAxisLabel(
+  date: Date,
+  range: '7d' | '30d' | '90d',
+): string {
   const monthDay = date.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -157,7 +165,8 @@ function buildActivitySeries(
       dayStart.setDate(dayStart.getDate() - (6 - i));
       const dayEnd = new Date(dayStart.getTime() + dayMs);
       const value = inRange.filter(
-        (d) => d.getTime() >= dayStart.getTime() && d.getTime() < dayEnd.getTime(),
+        (d) =>
+          d.getTime() >= dayStart.getTime() && d.getTime() < dayEnd.getTime(),
       ).length;
       return {
         label: formatActivityAxisLabel(dayStart, '7d'),
@@ -171,7 +180,8 @@ function buildActivitySeries(
     const dayStart = new Date(from.getTime() + i * dayMs);
     const dayEnd = new Date(dayStart.getTime() + dayMs);
     const value = inRange.filter(
-      (d) => d.getTime() >= dayStart.getTime() && d.getTime() < dayEnd.getTime(),
+      (d) =>
+        d.getTime() >= dayStart.getTime() && d.getTime() < dayEnd.getTime(),
     ).length;
     return {
       label: formatActivityAxisLabel(dayStart, range),
@@ -205,22 +215,29 @@ export class ExamSessionsService {
       throw new NotFoundException('Exam not found');
     }
 
+    const existingForExam = await this.prisma.examSession.findFirst({
+      where: { examId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (existingForExam?.status === 'ACTIVE') {
+      throw new ConflictException('This exam already has an active session');
+    }
+
     // 2. Handle invite code
     let inviteCode = dto.inviteCode;
-    
+
     if (inviteCode) {
-      // Check if provided code is unique
       const existing = await this.prisma.examSession.findUnique({
         where: { inviteCode },
       });
-      if (existing) {
+      if (existing && existing.id !== existingForExam?.id) {
         throw new ConflictException('Invite code already exists');
       }
     } else {
-      // Generate unique invite code
       let exists = true;
       let attempts = 0;
-      
+
       while (exists && attempts < 10) {
         inviteCode = `EXAM-${Math.floor(1000 + Math.random() * 9000)}`;
         const existing = await this.prisma.examSession.findUnique({
@@ -239,6 +256,26 @@ export class ExamSessionsService {
 
     const publicLink = `http://localhost:5173/join/${inviteCode}`;
 
+    if (existingForExam) {
+      if (existingForExam.teacherId !== teacherId) {
+        throw new ForbiddenException('You cannot manage this exam session');
+      }
+
+      return this.prisma.examSession.update({
+        where: { id: existingForExam.id },
+        data: {
+          inviteCode: inviteCode!,
+          publicLink,
+          timeLimitMins,
+          showAnswers: showAnswers ?? false,
+          startsAt: startsAt ? new Date(startsAt) : null,
+          endsAt: endsAt ? new Date(endsAt) : null,
+          status: 'ACTIVE',
+          teacherId,
+        },
+      });
+    }
+
     return this.prisma.examSession.create({
       data: {
         examId,
@@ -254,11 +291,65 @@ export class ExamSessionsService {
     });
   }
 
+  async findByExamId(examId: string, teacherId: string) {
+    const session = await this.prisma.examSession.findFirst({
+      where: { examId, teacherId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!session) {
+      return null;
+    }
+
+    return {
+      id: session.id,
+      examId: session.examId,
+      inviteCode: session.inviteCode,
+      publicLink: session.publicLink,
+      status: session.status,
+      timeLimitMins: session.timeLimitMins,
+      showAnswers: session.showAnswers,
+    };
+  }
+
+  async close(sessionId: string, teacherId: string) {
+    const session = await this.prisma.examSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (!session) {
+      throw new NotFoundException('Session not found');
+    }
+
+    if (session.teacherId !== teacherId) {
+      throw new ForbiddenException('You cannot manage this exam session');
+    }
+
+    if (session.status !== 'ACTIVE') {
+      throw new ConflictException('Session is not active');
+    }
+
+    const updated = await this.prisma.examSession.update({
+      where: { id: sessionId },
+      data: { status: 'CLOSED' },
+    });
+
+    return {
+      id: updated.id,
+      examId: updated.examId,
+      inviteCode: updated.inviteCode,
+      publicLink: updated.publicLink,
+      status: updated.status,
+      timeLimitMins: updated.timeLimitMins,
+      showAnswers: updated.showAnswers,
+    };
+  }
+
   async generateUniqueCode() {
     let inviteCode = '';
     let exists = true;
     let attempts = 0;
-    
+
     while (exists && attempts < 10) {
       inviteCode = `EXAM-${Math.floor(1000 + Math.random() * 9000)}`;
       const existing = await this.prisma.examSession.findUnique({
@@ -346,12 +437,14 @@ export class ExamSessionsService {
     });
 
     if (existingSubmission) {
-      throw new ConflictException('You have already started or submitted this exam');
+      throw new ConflictException(
+        'You have already started or submitted this exam',
+      );
     }
 
     // 4. Create submission
     const totalQuestions = session.exam.examItems.length;
-    
+
     const submission = await this.prisma.submission.create({
       data: {
         sessionId,
@@ -409,7 +502,9 @@ export class ExamSessionsService {
     });
 
     if (!submission) {
-      throw new NotFoundException('Submission not found or you have not started the exam');
+      throw new NotFoundException(
+        'Submission not found or you have not started the exam',
+      );
     }
 
     if (submission.submittedAt) {
@@ -426,9 +521,11 @@ export class ExamSessionsService {
       selectedOption: number;
       isCorrect: boolean;
     }> = [];
-    const optionMap = { 'A': 0, 'B': 1, 'C': 2, 'D': 3 };
+    const optionMap = { A: 0, B: 1, C: 2, D: 3 };
 
-    console.log(`[Grade] Bắt đầu chấm bài cho học sinh ${studentId} trong phiên ${sessionId}`);
+    console.log(
+      `[Grade] Bắt đầu chấm bài cho học sinh ${studentId} trong phiên ${sessionId}`,
+    );
     console.log(`[Grade] Tổng số câu hỏi trong đề: ${totalQuestions}`);
     console.log(`[Grade] Danh sách đáp án học sinh gửi lên:`, dto.answers);
 
@@ -436,24 +533,30 @@ export class ExamSessionsService {
       const studentAnswer = dto.answers.find(
         (a) => a.questionId === item.question.id,
       );
-      
-      const selectedOptionStr = studentAnswer ? studentAnswer.selectedOption : null;
-      const selectedOptionInt = selectedOptionStr ? optionMap[selectedOptionStr] : -1;
-      
+
+      const selectedOptionStr = studentAnswer
+        ? studentAnswer.selectedOption
+        : null;
+      const selectedOptionInt = selectedOptionStr
+        ? optionMap[selectedOptionStr]
+        : -1;
+
       const correctOptionStr = item.question.correctAnswer;
       const correctOptionInt = optionMap[correctOptionStr];
-      
+
       const isCorrect = selectedOptionStr === correctOptionStr;
-      
+
       console.log(`[Grade] Câu hỏi ID: ${item.question.id.substring(0, 8)}...`);
-      console.log(`  - Học sinh chọn: ${selectedOptionStr} (${selectedOptionInt})`);
+      console.log(
+        `  - Học sinh chọn: ${selectedOptionStr} (${selectedOptionInt})`,
+      );
       console.log(`  - Đáp án đúng: ${correctOptionStr} (${correctOptionInt})`);
-      console.log(`  - Kết quả: ${isCorrect ? "ĐÚNG" : "SAI"}`);
-      
+      console.log(`  - Kết quả: ${isCorrect ? 'ĐÚNG' : 'SAI'}`);
+
       if (isCorrect) {
         totalCorrect++;
       }
-      
+
       answerDetails.push({
         questionId: item.question.id,
         selectedOption: selectedOptionInt,
@@ -463,8 +566,10 @@ export class ExamSessionsService {
 
     const score = (totalCorrect / totalQuestions) * 10;
     const now = new Date();
-    const timeTakenSeconds = Math.floor((now.getTime() - submission.startedAt.getTime()) / 1000);
-    
+    const timeTakenSeconds = Math.floor(
+      (now.getTime() - submission.startedAt.getTime()) / 1000,
+    );
+
     console.log(`[Grade] Kết quả cuối cùng:`);
     console.log(`  - Số câu đúng: ${totalCorrect}`);
     console.log(`  - Số câu sai: ${totalQuestions - totalCorrect}`);
@@ -498,8 +603,10 @@ export class ExamSessionsService {
     });
 
     // 4. Return result
-    console.log(`[Grade] showAnswers of session: ${submission.session.showAnswers}`);
-    
+    console.log(
+      `[Grade] showAnswers of session: ${submission.session.showAnswers}`,
+    );
+
     if (submission.session.showAnswers) {
       return {
         score,
@@ -507,7 +614,9 @@ export class ExamSessionsService {
         totalQuestions,
         timeTakenSeconds,
         questions: examItems.map((item) => {
-          const detail = answerDetails.find((d) => d.questionId === item.question.id);
+          const detail = answerDetails.find(
+            (d) => d.questionId === item.question.id,
+          );
           return {
             questionId: item.question.id,
             text: item.question.name,
@@ -531,7 +640,9 @@ export class ExamSessionsService {
         totalQuestions,
         timeTakenSeconds,
         questions: examItems.map((item) => {
-          const detail = answerDetails.find((d) => d.questionId === item.question.id);
+          const detail = answerDetails.find(
+            (d) => d.questionId === item.question.id,
+          );
           return {
             questionId: item.question.id,
             text: item.question.name,
@@ -551,7 +662,9 @@ export class ExamSessionsService {
     }
   }
 
-  async getAnalyticsOverview(teacherId: string): Promise<AnalyticsOverviewResponseDto> {
+  async getAnalyticsOverview(
+    teacherId: string,
+  ): Promise<AnalyticsOverviewResponseDto> {
     const sessions = await this.prisma.examSession.findMany({
       where: { teacherId },
       include: {
@@ -571,21 +684,23 @@ export class ExamSessionsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const sessionSummaries: SessionAnalyticsSummaryDto[] = sessions.map((session) => {
-      const stats = computeSubmissionStats(session.submissions);
-      return {
-        sessionId: session.id,
-        examId: session.examId,
-        title: session.exam.title,
-        subjectName: session.exam.subject?.name ?? null,
-        grade: session.exam.subject?.grade ?? null,
-        questionCount: session.exam.examItems.length,
-        inviteCode: session.inviteCode,
-        status: session.status,
-        createdAt: session.createdAt.toISOString(),
-        ...stats,
-      };
-    });
+    const sessionSummaries: SessionAnalyticsSummaryDto[] = sessions.map(
+      (session) => {
+        const stats = computeSubmissionStats(session.submissions);
+        return {
+          sessionId: session.id,
+          examId: session.examId,
+          title: session.exam.title,
+          subjectName: session.exam.subject?.name ?? null,
+          grade: session.exam.subject?.grade ?? null,
+          questionCount: session.exam.examItems.length,
+          inviteCode: session.inviteCode,
+          status: session.status,
+          createdAt: session.createdAt.toISOString(),
+          ...stats,
+        };
+      },
+    );
 
     const allSubmissions = sessions.flatMap((s) => s.submissions);
     const totalsStats = computeSubmissionStats(allSubmissions);
@@ -633,7 +748,9 @@ export class ExamSessionsService {
     const now = Date.now();
     const examItems = session.exam.examItems;
 
-    const submittedSubmissions = session.submissions.filter((s) => s.submittedAt != null);
+    const submittedSubmissions = session.submissions.filter(
+      (s) => s.submittedAt != null,
+    );
 
     const questionAccuracy: QuestionAccuracyDto[] = examItems.map((item) => {
       if (submittedSubmissions.length === 0) {
@@ -646,7 +763,9 @@ export class ExamSessionsService {
 
       let correctCount = 0;
       for (const sub of submittedSubmissions) {
-        const detail = sub.answerDetails.find((d) => d.questionId === item.questionId);
+        const detail = sub.answerDetails.find(
+          (d) => d.questionId === item.questionId,
+        );
         if (detail?.isCorrect) {
           correctCount++;
         }
@@ -659,35 +778,38 @@ export class ExamSessionsService {
       };
     });
 
-    const submissions: SessionSubmissionAnalyticsDto[] = session.submissions.map((sub) => {
-      const endMs = sub.submittedAt ? sub.submittedAt.getTime() : now;
-      const timeSecs = Math.floor((endMs - sub.startedAt.getTime()) / 1000);
+    const submissions: SessionSubmissionAnalyticsDto[] =
+      session.submissions.map((sub) => {
+        const endMs = sub.submittedAt ? sub.submittedAt.getTime() : now;
+        const timeSecs = Math.floor((endMs - sub.startedAt.getTime()) / 1000);
 
-      let answers: SubmissionAnswerDto[] = [];
-      if (sub.submittedAt) {
-        answers = examItems.map((item) => {
-          const detail = sub.answerDetails.find((d) => d.questionId === item.questionId);
-          return {
-            orderIndex: item.orderIndex,
-            questionId: item.questionId,
-            isCorrect: detail?.isCorrect ?? false,
-          };
-        });
-      }
+        let answers: SubmissionAnswerDto[] = [];
+        if (sub.submittedAt) {
+          answers = examItems.map((item) => {
+            const detail = sub.answerDetails.find(
+              (d) => d.questionId === item.questionId,
+            );
+            return {
+              orderIndex: item.orderIndex,
+              questionId: item.questionId,
+              isCorrect: detail?.isCorrect ?? false,
+            };
+          });
+        }
 
-      return {
-        id: sub.id,
-        studentId: sub.studentId,
-        studentName: sub.student.name,
-        score: sub.score,
-        totalCorrect: sub.totalCorrect,
-        totalQuestions: sub.totalQuestions,
-        startedAt: sub.startedAt.toISOString(),
-        submittedAt: sub.submittedAt?.toISOString() ?? null,
-        timeSecs,
-        answers,
-      };
-    });
+        return {
+          id: sub.id,
+          studentId: sub.studentId,
+          studentName: sub.student.name,
+          score: sub.score,
+          totalCorrect: sub.totalCorrect,
+          totalQuestions: sub.totalQuestions,
+          startedAt: sub.startedAt.toISOString(),
+          submittedAt: sub.submittedAt?.toISOString() ?? null,
+          timeSecs,
+          answers,
+        };
+      });
 
     const stats = computeSubmissionStats(session.submissions);
 
@@ -764,9 +886,7 @@ export class ExamSessionsService {
         s.submittedAt != null && s.score != null,
     );
 
-    const activeStudentIds = new Set(
-      submittedRows.map((s) => s.studentId),
-    );
+    const activeStudentIds = new Set(submittedRows.map((s) => s.studentId));
 
     const avgScore =
       submittedRows.length > 0
@@ -809,19 +929,17 @@ export class ExamSessionsService {
     );
     const avgThisWeek =
       subsThisWeek.length > 0
-        ? subsThisWeek.reduce((sum, s) => sum + s.score, 0) / subsThisWeek.length
+        ? subsThisWeek.reduce((sum, s) => sum + s.score, 0) /
+          subsThisWeek.length
         : null;
     const avgPrevWeek =
       subsPrevWeek.length > 0
-        ? subsPrevWeek.reduce((sum, s) => sum + s.score, 0) / subsPrevWeek.length
+        ? subsPrevWeek.reduce((sum, s) => sum + s.score, 0) /
+          subsPrevWeek.length
         : null;
 
-    const studentsThisWeek = new Set(
-      subsThisWeek.map((s) => s.studentId),
-    ).size;
-    const studentsPrevWeek = new Set(
-      subsPrevWeek.map((s) => s.studentId),
-    ).size;
+    const studentsThisWeek = new Set(subsThisWeek.map((s) => s.studentId)).size;
+    const studentsPrevWeek = new Set(subsPrevWeek.map((s) => s.studentId)).size;
 
     const totalQuestions = exams.reduce((sum, e) => sum + e.totalQuestions, 0);
 
@@ -833,7 +951,10 @@ export class ExamSessionsService {
             Math.round(avgThisWeek * 10),
             Math.round(avgPrevWeek * 10),
           )
-        : { delta: 'No data yet', deltaDir: 'flat' as TeacherDashboardDeltaDir };
+        : {
+            delta: 'No data yet',
+            deltaDir: 'flat' as TeacherDashboardDeltaDir,
+          };
     const studentDelta = computeDelta(studentsThisWeek, studentsPrevWeek);
 
     const stats: TeacherDashboardStatDto[] = [
