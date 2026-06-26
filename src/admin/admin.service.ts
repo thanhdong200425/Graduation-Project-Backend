@@ -27,7 +27,7 @@ import {
   AdminDauChartDto,
   DauPointDto,
 } from './dto/admin-analytics.dto';
-import { startOfDay, startOfMonth, startOfWeek } from 'date-fns';
+import { AdminAnalyticsQueryDto } from './dto/admin-analytics-query.dto';
 
 export const safeAdminSelect = {
   id: true,
@@ -246,77 +246,142 @@ export class AdminService {
 
   /* ── Analytics ── */
 
-  async getAnalyticsOverview(): Promise<AdminAnalyticsOverviewDto> {
-    const todayUTC = startOfDay(new Date());
-    const weekStart = startOfWeek(todayUTC);
-    const monthStart = startOfMonth(todayUTC);
+  private resolveAnalyticsMonth(query: AdminAnalyticsQueryDto): {
+    year: number;
+    month: number;
+    monthStart: Date;
+    monthEndExclusive: Date;
+    daysInMonth: number;
+    elapsedDays: number;
+  } {
+    const now = new Date();
+    const year = query.year ?? now.getUTCFullYear();
+    const month = query.month ?? now.getUTCMonth() + 1;
+
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const currentMonthStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+
+    if (monthStart > currentMonthStart) {
+      throw new BadRequestException('Cannot query analytics for future months');
+    }
+
+    const monthEndExclusive = new Date(Date.UTC(year, month, 1));
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const isCurrentMonth =
+      year === now.getUTCFullYear() && month === now.getUTCMonth() + 1;
+    const elapsedDays = isCurrentMonth ? now.getUTCDate() : daysInMonth;
+
+    return {
+      year,
+      month,
+      monthStart,
+      monthEndExclusive,
+      daysInMonth,
+      elapsedDays,
+    };
+  }
+
+  private buildDailyDauPoints(
+    activities: { userId: string; createdAt: Date }[],
+    monthStart: Date,
+    daysInMonth: number,
+  ): DauPointDto[] {
+    const byDay = new Map<string, Set<string>>();
+    for (const activity of activities) {
+      const dayKey = activity.createdAt.toISOString().slice(0, 10);
+      if (!byDay.has(dayKey)) byDay.set(dayKey, new Set());
+      byDay.get(dayKey)!.add(activity.userId);
+    }
+
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = new Date(monthStart.getTime() + i * 24 * 60 * 60 * 1000);
+      const dayKey = day.toISOString().slice(0, 10);
+      return { date: dayKey, value: byDay.get(dayKey)?.size ?? 0 };
+    });
+  }
+
+  private averageDau(points: DauPointDto[], elapsedDays: number): number {
+    if (elapsedDays <= 0) return 0;
+    const total = points
+      .slice(0, elapsedDays)
+      .reduce((sum, point) => sum + point.value, 0);
+    return Math.round((total / elapsedDays) * 10) / 10;
+  }
+
+  async getAnalyticsOverview(
+    query: AdminAnalyticsQueryDto,
+  ): Promise<AdminAnalyticsOverviewDto> {
+    const { monthStart, monthEndExclusive, daysInMonth, elapsedDays } =
+      this.resolveAnalyticsMonth(query);
+    const createdInMonth = {
+      createdAt: { gte: monthStart, lt: monthEndExclusive },
+    };
+
+    const submittedInMonth = {
+      submittedAt: { gte: monthStart, lt: monthEndExclusive },
+    };
 
     const [
       totalUsers,
       teachers,
       students,
-      dauGroups,
-      examToday,
-      examThisWeek,
-      examThisMonth,
+      examCount,
+      sessionCount,
+      submissionCount,
+      loginActivities,
     ] = await Promise.all([
-      this.prisma.user.count(),
-      this.prisma.user.count({ where: { role: UserRole.TEACHER } }),
-      this.prisma.user.count({ where: { role: UserRole.STUDENT } }),
-      this.prisma.userActivity.groupBy({
-        by: ['userId'],
+      this.prisma.user.count({ where: createdInMonth }),
+      this.prisma.user.count({
+        where: { ...createdInMonth, role: UserRole.TEACHER },
+      }),
+      this.prisma.user.count({
+        where: { ...createdInMonth, role: UserRole.STUDENT },
+      }),
+      this.prisma.exam.count({ where: createdInMonth }),
+      this.prisma.examSession.count({ where: createdInMonth }),
+      this.prisma.submission.count({ where: submittedInMonth }),
+      this.prisma.userActivity.findMany({
         where: {
           action: UserActivityAction.LOGIN,
-          createdAt: { gte: todayUTC },
+          createdAt: { gte: monthStart, lt: monthEndExclusive },
         },
+        select: { userId: true, createdAt: true },
       }),
-      this.prisma.exam.count({ where: { createdAt: { gte: todayUTC } } }),
-      this.prisma.exam.count({ where: { createdAt: { gte: weekStart } } }),
-      this.prisma.exam.count({ where: { createdAt: { gte: monthStart } } }),
     ]);
+
+    const dailyPoints = this.buildDailyDauPoints(
+      loginActivities,
+      monthStart,
+      daysInMonth,
+    );
 
     return {
       totalUsers,
       teachers,
       students,
-      dau: dauGroups.length,
-      examToday,
-      examThisWeek,
-      examThisMonth,
+      dau: this.averageDau(dailyPoints, elapsedDays),
+      examCount,
+      sessionCount,
+      submissionCount,
     };
   }
 
-  async getDauChart(range: '7d' | '30d' | '90d'): Promise<AdminDauChartDto> {
-    const days = range === '7d' ? 7 : range === '30d' ? 30 : 90;
-    const now = new Date();
-    const todayUTC = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-    );
-    const rangeStart = new Date(
-      todayUTC.getTime() - (days - 1) * 24 * 60 * 60 * 1000,
-    );
+  async getDauChart(query: AdminAnalyticsQueryDto): Promise<AdminDauChartDto> {
+    const { monthStart, monthEndExclusive, daysInMonth } =
+      this.resolveAnalyticsMonth(query);
 
     const activities = await this.prisma.userActivity.findMany({
       where: {
         action: UserActivityAction.LOGIN,
-        createdAt: { gte: rangeStart },
+        createdAt: { gte: monthStart, lt: monthEndExclusive },
       },
       select: { userId: true, createdAt: true },
     });
 
-    const byDay = new Map<string, Set<string>>();
-    for (const a of activities) {
-      const dayKey = a.createdAt.toISOString().slice(0, 10);
-      if (!byDay.has(dayKey)) byDay.set(dayKey, new Set());
-      byDay.get(dayKey)!.add(a.userId);
-    }
-
-    const data: DauPointDto[] = Array.from({ length: days }, (_, i) => {
-      const d = new Date(rangeStart.getTime() + i * 24 * 60 * 60 * 1000);
-      const dayKey = d.toISOString().slice(0, 10);
-      return { date: dayKey, value: byDay.get(dayKey)?.size ?? 0 };
-    });
-
-    return { data };
+    return {
+      data: this.buildDailyDauPoints(activities, monthStart, daysInMonth),
+    };
   }
 }

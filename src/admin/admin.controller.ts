@@ -18,6 +18,7 @@ import { AdminChangePasswordDto } from './dto/admin-change-password.dto';
 import { AdminLoginDto } from './dto/admin-login.dto';
 import { AdminUpdateProfileDto } from './dto/admin-update-profile.dto';
 import { AdminJwtGuard } from './admin-jwt.guard';
+import { AdminAnalyticsQueryDto } from './dto/admin-analytics-query.dto';
 import type { AdminAuthRequest } from './interfaces/admin-auth-request.interface';
 
 @Controller('admin')
@@ -101,14 +102,13 @@ export class AdminController {
 
   @Get('analytics/overview')
   @UseGuards(AdminJwtGuard)
-  getAnalyticsOverview() {
-    return this.adminService.getAnalyticsOverview();
+  getAnalyticsOverview(@Query() query: AdminAnalyticsQueryDto) {
+    return this.adminService.getAnalyticsOverview(query);
   }
 
   @Get('analytics/dau-chart')
   @UseGuards(AdminJwtGuard)
-  getDauChart(@Query('range') range?: string) {
-    const validRange = range === '7d' || range === '30d' ? range : '90d';
-    return this.adminService.getDauChart(validRange);
+  getDauChart(@Query() query: AdminAnalyticsQueryDto) {
+    return this.adminService.getDauChart(query);
   }
 }

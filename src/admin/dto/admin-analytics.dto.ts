@@ -8,9 +8,9 @@ export class AdminAnalyticsOverviewDto {
   teachers: number;
   students: number;
   dau: number;
-  examToday: number;
-  examThisWeek: number;
-  examThisMonth: number;
+  examCount: number;
+  sessionCount: number;
+  submissionCount: number;
 }
 
 export class AdminDauChartDto {
